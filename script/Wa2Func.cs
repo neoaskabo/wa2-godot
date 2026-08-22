@@ -223,6 +223,8 @@ public class Wa2Func
 			_engine.SoundMgr.StopVoice(0);
 		}
 		_engine.VoiceInfos.Clear();
+		_engine.AdvMain.NameLabel.Clear();
+		_engine.AdvMain.NameLabel.Text = "";
 		return true;
 	}
 	public bool SetMessage2(List<Wa2Var> args)
