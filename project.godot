@@ -24,14 +24,12 @@ window/size/viewport_height=720
 window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
+; 0 = landscape (matches the 1280x720 viewport) on handheld devices
+window/handheld/orientation=0
 
 [dotnet]
 
 project/assembly_name="wa2"
-
-[editor_plugins]
-
-enabled=PackedStringArray("res://addons/gde_gozen/plugin.cfg")
 
 [input]
 

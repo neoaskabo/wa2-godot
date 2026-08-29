@@ -463,6 +463,29 @@ public partial class Wa2EngineMain : Control
 			// await ToSignal(GetTree(), SceneTree.SignalName.OnRequestPermissionsResult);
 			// }
 		}
+		else if (OS.GetName() == "iOS")
+		{
+			// iOS has no shared "phone root" folder like Android. The game data has to
+			// live inside the app sandbox, in the Documents folder, which is exposed to
+			// Finder/iTunes file sharing and the Files app (see the
+			// user_data/accessible_from_* options in the iOS export preset).
+			string docs = OS.GetSystemDir(OS.SystemDir.Documents);
+			if (!docs.EndsWith("/"))
+			{
+				docs += "/";
+			}
+			Wa2Resource.ResPath = docs + "Wa2Res/";
+
+			if (!DirAccess.DirExistsAbsolute(Wa2Resource.ResPath))
+			{
+				DirAccess.MakeDirAbsolute(Wa2Resource.ResPath);
+			}
+			SavPath = Wa2Resource.ResPath + "sav/";
+			if (!DirAccess.DirExistsAbsolute(SavPath))
+			{
+				DirAccess.MakeDirAbsolute(SavPath);
+			}
+		}
 		else
 		{
 			Wa2Resource.ResPath = "res://assets/";

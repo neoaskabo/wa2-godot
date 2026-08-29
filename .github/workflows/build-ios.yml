@@ -1,0 +1,186 @@
+# ---------------------------------------------------------------------------
+# Build an UNSIGNED iOS IPA for wa2-godot using GitHub's macOS runner.
+#
+# Why unsigned: a free Apple ID cannot be used for automated signing in CI
+# (Apple requires interactive 2FA and the session expires constantly).
+# So we build an unsigned .app, wrap it as an .ipa, and you sign it on
+# install with Sideloadly / AltStore / SideStore using your free Apple ID.
+#
+# Result: an artifact named wa2-ios-unsigned.ipa (iPhone + iPad universal).
+# ---------------------------------------------------------------------------
+name: Build iOS IPA (unsigned)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+concurrency:
+  group: build-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.5.1"
+  GODOT_RELEASE: "stable"
+  PRESET_NAME: "iOS"
+  XCODE_PROJECT: "build/wa2.xcodeproj"
+
+jobs:
+  build:
+    name: Export Godot project and build unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          sw_vers
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Install .NET iOS workload
+        run: |
+          dotnet workload install ios --skip-sign-check
+          dotnet workload list
+
+      - name: Cache Godot editor
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_RELEASE }}-mono-macos-universal
+
+      - name: Download Godot editor (.NET / mono)
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p ~/godot
+          cd ~/godot
+          curl -L --fail --retry 3 -o godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-${GODOT_RELEASE}_mono_macos.universal.zip"
+          unzip -q godot.zip
+          rm -f godot.zip
+
+      - name: Resolve Godot binary
+        run: |
+          set -euo pipefail
+          GODOT_BIN="$(find "$HOME/godot" -type f -name 'Godot' -perm +111 | head -n 1)"
+          if [ -z "$GODOT_BIN" ]; then
+            echo "Godot binary not found under ~/godot"; find "$HOME/godot" -maxdepth 3 | head -50; exit 1
+          fi
+          echo "GODOT_BIN=$GODOT_BIN" >> "$GITHUB_ENV"
+          "$GODOT_BIN" --version
+
+      - name: Install Godot export templates
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 -o /tmp/tpz.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-${GODOT_RELEASE}_mono_export_templates.tpz"
+          rm -rf /tmp/tpz && mkdir -p /tmp/tpz
+          unzip -q -o /tmp/tpz.zip -d /tmp/tpz
+          ls /tmp/tpz/templates | head -30
+
+          # Install under both the reported version string and the canonical
+          # mono folder name, so we don't depend on how --version is formatted.
+          for d in "$("$GODOT_BIN" --version)" "${GODOT_VERSION}.${GODOT_RELEASE}.mono"; do
+            TDIR="$HOME/Library/Application Support/Godot/export_templates/$d"
+            mkdir -p "$TDIR"
+            cp -R /tmp/tpz/templates/. "$TDIR/"
+            echo "installed templates -> $TDIR"
+          done
+
+      - name: Import project
+        run: '"$GODOT_BIN" --headless --path . --import'
+
+      - name: Export Xcode project (iOS)
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          "$GODOT_BIN" --headless --path . --export-release "$PRESET_NAME" "$XCODE_PROJECT"
+          echo "--- export output ---"
+          find build -maxdepth 2 | head -40
+
+      - name: Resolve Xcode scheme
+        run: |
+          set -euo pipefail
+          SCHEME="$(xcodebuild -project "$XCODE_PROJECT" -list -json \
+            | python3 -c 'import sys,json;print(json.load(sys.stdin)["project"]["schemes"][0])')"
+          echo "SCHEME=$SCHEME" >> "$GITHUB_ENV"
+          echo "using scheme: $SCHEME"
+
+      - name: Build unsigned .app
+        run: |
+          set -euo pipefail
+          mkdir -p build/logs
+          xcodebuild \
+            -project "$XCODE_PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            PROVISIONING_PROFILE="" \
+            ONLY_ACTIVE_ARCH=NO \
+            > build/logs/xcodebuild.log 2>&1 \
+            || { echo "xcodebuild FAILED, last 120 lines:"; tail -n 120 build/logs/xcodebuild.log; exit 1; }
+          tail -n 20 build/logs/xcodebuild.log
+
+      - name: Verify built .app
+        run: |
+          set -euo pipefail
+          APP="$(find build/DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' -type d | head -n 1)"
+          if [ -z "$APP" ]; then
+            echo "No .app produced"; find build/DerivedData -maxdepth 4 -name '*.app' | head; exit 1
+          fi
+          echo "APP=$APP" >> "$GITHUB_ENV"
+          echo "app: $APP"
+          echo "--- architecture ---"
+          lipo -info "$APP/$(basename "$APP" .app)" || true
+          echo "--- file sharing (must be true) ---"
+          /usr/libexec/PlistBuddy -c "Print :UIFileSharingEnabled" "$APP/Info.plist" || true
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          rm -rf Payload && mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry "wa2-ios-unsigned.ipa" Payload
+          ls -lh wa2-ios-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wa2-ios-unsigned
+          path: wa2-ios-unsigned.ipa
+          retention-days: 30
+
+      - name: Summary
+        run: |
+          {
+            echo "### wa2 iOS build (unsigned)"
+            echo ""
+            echo "Artifact: \`wa2-ios-unsigned.ipa\` (iPhone + iPad, iOS 14.0+)"
+            echo ""
+            echo "### Next: sign and install with a free Apple ID"
+            echo "1. Download the artifact from this run."
+            echo "2. Open Sideloadly (Windows/macOS) or AltStore."
+            echo "3. Drag the IPA in, sign with your Apple ID, install."
+            echo "4. Re-sign every 7 days (free account limit)."
+            echo ""
+            echo "### Then copy the game data in"
+            echo "Connect the phone, open Finder > Files tab, select the app and"
+            echo "copy your PC \`Wa2Res\` folder into its Documents folder."
+          } >> "$GITHUB_STEP_SUMMARY"
