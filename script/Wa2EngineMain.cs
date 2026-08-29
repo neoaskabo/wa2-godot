@@ -172,6 +172,14 @@ public partial class Wa2EngineMain : Control
 	{
 		if (string.IsNullOrEmpty(name)) return "";
 
+		// iOS 没有可用的视频解码后端（gde_gozen 是 FFmpeg 的 GDExtension，没有 iOS 构建），
+		// 这里直接返回空路径，让引擎走「影片文件不存在」的分支（OnVideoFinished），
+		// 而不是停在永远等不到帧的播放器上。
+		if (OS.GetName() == "iOS")
+		{
+			return "";
+		}
+
 		// 统一转小写进行匹配，无论输入是 MV00 还是 mv00 都能找到
 		string key = name.ToLower();
 

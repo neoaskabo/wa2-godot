@@ -51,6 +51,15 @@ jobs:
           dotnet workload install ios --skip-sign-check
           dotnet workload list
 
+      - name: "Preflight - compile C# sources"
+        run: |
+          set -euo pipefail
+          # Godot runs `dotnet publish` internally and swallows the MSBuild
+          # output, so a broken build just prints "Failed to build project".
+          # Compile here first (host architecture is fine) to surface the real
+          # C# errors, e.g. CS0246 for a missing type, in the Actions log.
+          dotnet build wa2.csproj -c Release -v minimal
+
       - name: Cache Godot editor
         id: cache-godot
         uses: actions/cache@v4
@@ -104,9 +113,20 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build
-          "$GODOT_BIN" --headless --path . --export-release "$PRESET_NAME" "$XCODE_PROJECT"
+          # IMPORTANT: Godot exits 0 even when the .NET publish fails, which
+          # silently yields an .app containing no game code. Capture the log and
+          # fail hard on the errors that actually matter.
+          "$GODOT_BIN" --headless --path . --export-release "$PRESET_NAME" "$XCODE_PROJECT" 2>&1 | tee build/export.log
+
           echo "--- export output ---"
           find build -maxdepth 2 | head -40
+
+          echo "--- scanning export log for build errors ---"
+          if grep -nE "Failed to build project|error CS[0-9]+|Cannot load C# script file|Unhandled exception" build/export.log; then
+            echo "::error::Godot export reported C# build errors; the .app would ship without game code."
+            exit 1
+          fi
+          echo "no C# build errors in export log"
 
       - name: Resolve Xcode scheme
         run: |
@@ -147,10 +167,27 @@ jobs:
           fi
           echo "APP=$APP" >> "$GITHUB_ENV"
           echo "app: $APP"
+          EXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
+          BIN="$APP/$EXE"
+
           echo "--- architecture ---"
-          lipo -info "$APP/$(basename "$APP" .app)" || true
+          lipo -info "$BIN" || true
           echo "--- file sharing (must be true) ---"
           /usr/libexec/PlistBuddy -c "Print :UIFileSharingEnabled" "$APP/Info.plist" || true
+
+          echo "--- is the game code actually inside? ---"
+          echo "bundle size: $(du -sh "$APP" | cut -f1)"
+          echo "main binary: $(ls -lh "$BIN" | awk '{print $5}')"
+          echo ".dll files in bundle: $(find "$APP" -name '*.dll' | wc -l | tr -d ' ')"
+          find "$APP" -name '*.dll' | head -20
+          # The Godot iOS/.NET export uses NativeAOT, so there may be no .dll at
+          # all. In that case the managed symbols are baked into the main
+          # binary; look for a type that only exists in this game's C# sources.
+          if strings "$BIN" | grep -q "Wa2EngineMain"; then
+            echo "OK: Wa2EngineMain found in the main binary (game code is linked in)"
+          else
+            echo "::warning::Wa2EngineMain not found in the main binary - verify the app before shipping"
+          fi
 
       - name: Package unsigned IPA
         run: |

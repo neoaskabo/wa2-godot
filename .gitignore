@@ -25,7 +25,10 @@
 /assets/fonts/jp
 /assets/fonts/fzzyjt.ttf
 /assets/fonts/fzzyjt.ttf.import
-addons/gde_gozen/
+# The upstream gde_gozen addon is not published (it was ignored), but we ship an
+# API-compatible stub so a fresh clone compiles. Keep just that file tracked.
+# addons/gde_gozen/
+!addons/gde_gozen/VideoPlayback.cs
 # !assets/font.map
 # !assets/fonts/number.tres
 # !assets/ani
