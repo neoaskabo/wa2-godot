@@ -194,9 +194,17 @@ jobs:
           fi
           echo "managed framework: $FW ($(ls -lh "$FW" | awk '{print $5}'))"
 
+          # Dump once and grep the file. Piping `strings` into `grep -q` makes
+          # grep exit on the first hit, so strings dies of EPIPE ("failed to
+          # flush output") and, with pipefail set, that non-zero status is
+          # mistaken for "symbol not found".
+          STRINGS_DUMP="$(mktemp)"
+          strings "$FW" > "$STRINGS_DUMP" 2>/dev/null || true
+          echo "strings dumped: $(wc -l < "$STRINGS_DUMP" | tr -d ' ') lines"
+
           MISSING=""
           for sym in Wa2EngineMain Wa2AdvMain Wa2Resource SubtitleMgr YamlDotNet; do
-            if strings "$FW" | grep -q "$sym"; then
+            if grep -q "$sym" "$STRINGS_DUMP"; then
               echo "  found: $sym"
             else
               echo "  MISSING: $sym"
