@@ -184,7 +184,10 @@ jobs:
           # managed code is compiled into a framework next to the executable.
           # A silent publish failure just leaves that framework out, so check
           # it explicitly - an app without it runs but shows a blank screen.
-          FW="$(find "$APP/Frameworks" -type f -perm +111 2>/dev/null | head -n 1)"
+          # Detect by content, not by mode: Godot leaves the dylib at 0644,
+          # and `find -perm +111` is GNU-only anyway (this runner uses BSD find).
+          FW="$(find "$APP/Frameworks" -type f -exec file {} + 2>/dev/null \
+                | grep 'Mach-O' | cut -d: -f1 | head -n 1 || true)"
           if [ -z "$FW" ]; then
             echo "::error::No managed framework in the bundle - the .NET publish silently failed."
             exit 1
@@ -211,6 +214,17 @@ jobs:
           set -euo pipefail
           rm -rf Payload && mkdir -p Payload
           cp -R "$APP" Payload/
+
+          # Godot's export template writes the NativeAOT dylib mode 0644. dyld
+          # needs to mmap the __TEXT segment as PROT_EXEC, so a non-executable
+          # dylib can fail to load at launch. Restore the execute bit here.
+          for f in $(find Payload -path '*/Frameworks/*' -type f); do
+            if file "$f" | grep -q 'Mach-O'; then
+              chmod 755 "$f"
+              echo "chmod 755 -> $f"
+            fi
+          done
+
           zip -qry "wa2-ios-unsigned.ipa" Payload
           ls -lh wa2-ios-unsigned.ipa
 
