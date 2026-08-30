@@ -116,11 +116,27 @@ iOS 没有「手机根目录」，数据要放进 App 沙盒：
 
 1. 用数据线连接手机，打开 **Finder**
 2. 侧边栏选中你的 iPhone → 点 **文件** 标签页
-3. 在列表里找到 **WhiteAlbum2**，把 PC 版游戏文件夹重命名为 `Wa2Res` 后拖进去
+3. 在列表里找到 **White Album 2**，把 PC 版游戏文件夹重命名为 `Wa2Res` 后拖进去
 
 > ⚠️ 不要多套一层目录。正确结构是 `Wa2Res/` 下面直接是 `BGM.PAK`、`script.pak` 等文件。
 
-也可以用 **文件 App** → 我的 iPhone → WhiteAlbum2 导入。
+也可以用 **文件 App** → 我的 iPhone → White Album 2 导入。
+
+首次启动会自动创建这些目录，如果没看到可以先启动一次 App：
+
+```
+Documents/
+├── Wa2Res/          ← 在这里放游戏数据
+│   ├── IC/          ← 自动创建
+│   └── movie/       ← 自动创建（没有也能进游戏，会自动跳过 MV）
+└── sav/             ← 自动创建，存档放这里
+```
+
+存档特意放在 `Wa2Res` **外面**，这样以后重新拷游戏数据不会把进度一起删掉。
+
+> ⚠️ iOS 的 APFS 默认**大小写敏感**。如果从 PC 拷过来的文件名是 `voice.pak` 而代码找的是
+> `VOICE.PAK`，会加载失败。绝大多数 PC 版原盘文件名本来就是大写的，正常情况下不用管；
+> 万一提示文件不存在，先检查大小写。
 
 ---
 
@@ -136,12 +152,37 @@ iOS 没有「手机根目录」，数据要放进 App 沙盒：
 | 版本 | 0.2.8 |
 | 文件共享 | `UIFileSharingEnabled = true`（可通过 Finder / 文件 App 拷数据） |
 | 方向 | 横屏（左 + 右） |
+| 显示名 | `White Album 2` |
 | 体积 | 约 46 MB（IPA 压缩包），解压后约 123 MB |
 | 游戏代码 | 在 `Frameworks/wa2.framework/wa2`（约 24 MB，NativeAOT 编译产物） |
 
 > Godot 的 iOS/.NET 导出使用 **NativeAOT**，包里**没有** `.dll`，
 > C# 代码被编进了 framework。用 `strings Frameworks/wa2.framework/wa2 | grep Wa2EngineMain`
-> 可以确认游戏代码是否真的进去了。
+> 可以确认游戏代码是否真的进去了（类型名是 ASCII，能被 `strings` 直接扫到）。
+>
+> 注意：**C# 的字符串字面量在 .NET 元数据里是 UTF-16LE 存的**，
+> 用 `strings` 默认（UTF-8 / 最短 4 字节）扫不到，会误判成「新代码没编进去」。
+> 要验证字符串字面量得按 UTF-16LE 扫，例如用 Python：
+>
+> ```python
+> data = open("Frameworks/wa2.framework/wa2", "rb").read()
+> data.count("[wa2] iOS user dir".encode("utf-16-le"))   # >0 即已编入
+> ```
+
+### 排查：读不到 Wa2Res
+
+如果还是提示资源文件夹不存在，游戏启动时会往控制台打这三行，用 Xcode →
+Devices and Simulators → Open Console（或 `Console.app` 选设备）能看到：
+
+```
+[wa2] iOS user dir : /var/mobile/Containers/Data/Application/<UUID>/Documents
+[wa2] iOS res path : /var/mobile/Containers/Data/Application/<UUID>/Documents/Wa2Res/
+[wa2] iOS sav path : /var/mobile/Containers/Data/Application/<UUID>/Documents/sav/
+```
+
+`res path` 必须是 Documents 下的绝对路径。如果它是 `./Wa2Res/`，
+说明拿到的是旧包，重新下载一次。紧接着还会列出该目录下实际有哪些文件，
+可以直接看出是不是拷错了层级。
 
 ---
 
