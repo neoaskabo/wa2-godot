@@ -24,8 +24,10 @@ window/size/viewport_height=720
 window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
-; 0 = landscape (matches the 1280x720 viewport) on handheld devices
-window/handheld/orientation=0
+; 4 = sensor landscape: the 1280x720 viewport stays landscape, but the game
+; follows the device when you turn it the other way round. (0 would hard-lock
+; it to LandscapeLeft only, which is annoying on both iPhone and iPad.)
+window/handheld/orientation=4
 
 [dotnet]
 

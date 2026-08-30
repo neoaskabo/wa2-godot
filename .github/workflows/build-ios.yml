@@ -179,15 +179,32 @@ jobs:
           echo "bundle size: $(du -sh "$APP" | cut -f1)"
           echo "main binary: $(ls -lh "$BIN" | awk '{print $5}')"
           echo ".dll files in bundle: $(find "$APP" -name '*.dll' | wc -l | tr -d ' ')"
-          find "$APP" -name '*.dll' | head -20
-          # The Godot iOS/.NET export uses NativeAOT, so there may be no .dll at
-          # all. In that case the managed symbols are baked into the main
-          # binary; look for a type that only exists in this game's C# sources.
-          if strings "$BIN" | grep -q "Wa2EngineMain"; then
-            echo "OK: Wa2EngineMain found in the main binary (game code is linked in)"
-          else
-            echo "::warning::Wa2EngineMain not found in the main binary - verify the app before shipping"
+
+          # Godot's iOS/.NET export uses NativeAOT: there is no .dll, the
+          # managed code is compiled into a framework next to the executable.
+          # A silent publish failure just leaves that framework out, so check
+          # it explicitly - an app without it runs but shows a blank screen.
+          FW="$(find "$APP/Frameworks" -type f -perm +111 2>/dev/null | head -n 1)"
+          if [ -z "$FW" ]; then
+            echo "::error::No managed framework in the bundle - the .NET publish silently failed."
+            exit 1
           fi
+          echo "managed framework: $FW ($(ls -lh "$FW" | awk '{print $5}'))"
+
+          MISSING=""
+          for sym in Wa2EngineMain Wa2AdvMain Wa2Resource SubtitleMgr YamlDotNet; do
+            if strings "$FW" | grep -q "$sym"; then
+              echo "  found: $sym"
+            else
+              echo "  MISSING: $sym"
+              MISSING="$MISSING $sym"
+            fi
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::Game code missing from the framework:$MISSING"
+            exit 1
+          fi
+          echo "OK: game code is linked into the bundle"
 
       - name: Package unsigned IPA
         run: |
