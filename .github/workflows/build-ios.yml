@@ -12,8 +12,14 @@ name: Build iOS IPA (unsigned)
 
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish the IPA to GitHub Packages and Releases'
+        type: boolean
+        default: true
   push:
     branches: [main, master]
+    tags: ['v*']
 
 concurrency:
   group: build-ios-${{ github.ref }}
@@ -24,6 +30,11 @@ env:
   GODOT_RELEASE: "stable"
   PRESET_NAME: "iOS"
   XCODE_PROJECT: "build/wa2.xcodeproj"
+  IPA_NAME: "wa2-ios-unsigned.ipa"
+  APP_VERSION: "0.2.8"
+  RELEASE_TAG: "v0.2.8-ios"
+  PKG_GROUP: "io.github.neoaskabo"
+  PKG_ARTIFACT: "wa2-ios"
 
 jobs:
   build:
@@ -260,3 +271,118 @@ jobs:
             echo "Connect the phone, open Finder > Files tab, select the app and"
             echo "copy your PC \`Wa2Res\` folder into its Documents folder."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # -------------------------------------------------------------------------
+  # Publish. Runs on manual dispatch (publish checkbox) or when a v* tag is
+  # pushed. Uses the built-in GITHUB_TOKEN, which has `packages: write` -
+  # a personal token would need the write:packages scope added by hand.
+  # -------------------------------------------------------------------------
+  publish:
+    name: Publish IPA to Releases and Packages
+    needs: build
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.publish != 'false')
+      || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download IPA artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wa2-ios-unsigned
+          path: dist
+
+      - name: Show what will be published
+        run: |
+          set -euo pipefail
+          ls -lh dist/
+          sha256sum "dist/${IPA_NAME}" | tee dist/sha256.txt
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          {
+            echo "Unsigned iOS build of [wa2-godot](https://github.com/dorakyuraduang/wa2-godot)"
+            echo "(白色相簿2) built by GitHub Actions from \`${{ github.sha }}\`."
+            echo ""
+            echo "## Install"
+            echo ""
+            echo "This IPA is **unsigned** - it will not install as-is. Sign it on"
+            echo "install with a free Apple ID using Sideloadly, AltStore or SideStore,"
+            echo "then re-sign every 7 days."
+            echo ""
+            echo "## Game data"
+            echo ""
+            echo "Copy your PC \`Wa2Res\` folder into the app's Documents folder"
+            echo "(Finder > Files tab, or the Files app). File sharing is enabled."
+            echo ""
+            echo "## Verified in CI"
+            echo ""
+            echo "- arm64, iOS 14.0+, iPhone + iPad"
+            echo "- \`UIFileSharingEnabled = true\`"
+            echo "- Landscape (left + right)"
+            echo "- Game code linked into \`Frameworks/wa2.framework/wa2\` (NativeAOT)"
+            echo ""
+            echo "## Known limitations"
+            echo ""
+            echo "- Godot's C# iOS export is officially experimental"
+            echo "- Chinese text only"
+            echo "- In-game movies are skipped (no FFmpeg backend on iOS)"
+            echo ""
+            echo "---"
+            echo "\`\`\`"
+            cat dist/sha256.txt
+            echo "\`\`\`"
+          } > dist/notes.md
+
+          if gh release view "${RELEASE_TAG}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release ${RELEASE_TAG} exists, replacing the asset"
+            gh release upload "${RELEASE_TAG}" "dist/${IPA_NAME}" \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "${RELEASE_TAG}" "dist/${IPA_NAME}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "WhiteAlbum2 iOS ${APP_VERSION} (unsigned)" \
+              --notes-file dist/notes.md
+          fi
+          echo "release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}"
+
+      - name: Publish to GitHub Packages (Maven registry)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # GitHub Packages has no "generic file" registry, so the Maven
+          # endpoint is used to host the raw .ipa. Coordinates:
+          #   io.github.neoaskabo:wa2-ios:<version>
+          GROUP_PATH="$(echo "${PKG_GROUP}" | tr '.' '/')"
+          FILE="${PKG_ARTIFACT}-${APP_VERSION}.ipa"
+          URL="https://maven.pkg.github.com/${GITHUB_REPOSITORY}/${GROUP_PATH}/${PKG_ARTIFACT}/${APP_VERSION}/${FILE}"
+
+          echo "PUT ${URL}"
+          curl -sS -X PUT \
+            -u "${GITHUB_ACTOR}:${GITHUB_TOKEN}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@dist/${IPA_NAME}" \
+            -w "\nHTTP %{http_code}\n" \
+            "${URL}"
+
+      - name: Verify the package landed
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api "users/${GITHUB_REPOSITORY_OWNER}/packages?package_type=maven" \
+            --jq '.[] | select(.name == "'"${PKG_GROUP}.${PKG_ARTIFACT}"'") | {name, package_type, version_count, url: .html_url}' \
+            || true
+          gh api "users/${GITHUB_REPOSITORY_OWNER}/packages/maven/${PKG_GROUP}.${PKG_ARTIFACT}/versions" \
+            --jq '.[] | {id, name}' || true
