@@ -29,13 +29,41 @@
 ### iOS 读取资源的路径
 
 ```csharp
-Wa2Resource.ResPath = OS.GetSystemDir(OS.SystemDir.Documents) + "/Wa2Res/";
+string userDir  = OS.GetUserDataDir();                 // <App>/Documents
+string resRoot  = userDir.PathJoin("Wa2Res");
+Wa2Resource.ResPath = resRoot + "/";
+SavPath             = userDir.PathJoin("sav") + "/";
 ```
+
+**必须用 `OS.GetUserDataDir()`，不能用 `OS.GetSystemDir(OS.SystemDir.Documents)`。**
+
+Godot 4.5.1 里 iOS 只覆盖了前者：
+
+| API | iOS 上的实际返回值 | 来源 |
+|-----|------------------|------|
+| `OS.GetUserDataDir()` | `/var/mobile/.../Documents`（绝对路径） | `OS_AppleEmbedded::get_user_data_dir()`，取 `NSDocumentDirectory` |
+| `OS.GetSystemDir(SystemDir.Documents)` | `"."` | 基类 `OS::get_system_dir()` 的默认实现，iOS 从未覆盖 |
+
+用后者的后果是 `ResPath` 变成 `"./Wa2Res/"`，相对路径会被解析到**只读的 App 包内**，
+于是无论往文件共享目录里放什么都读不到（这是第一版 IPA 的 bug）。
 
 App 的 Documents 目录已通过两个导出选项对外暴露：
 
 - `user_data/accessible_from_itunes_sharing` → `UIFileSharingEnabled`
 - `user_data/accessible_from_files_app` → `LSSupportsOpeningDocumentsInPlace`
+
+首次启动会自动创建 `Wa2Res/`、`Wa2Res/IC/`、`Wa2Res/movie/` 和 `sav/`。
+存档放在 `sav/`（与 `Wa2Res/` 平级），这样重新覆盖游戏数据不会清掉进度。
+
+排查时可以在 Xcode 控制台里看这几行日志：
+
+```
+[wa2] iOS user dir : /var/mobile/Containers/Data/Application/.../Documents
+[wa2] iOS res path : .../Documents/Wa2Res/
+[wa2] res dir      : .../Documents/Wa2Res/
+[wa2] res dir entries:
+[wa2]   .../Documents/Wa2Res/BGM.PAK
+```
 
 ---
 

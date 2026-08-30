@@ -473,26 +473,38 @@ public partial class Wa2EngineMain : Control
 		}
 		else if (OS.GetName() == "iOS")
 		{
-			// iOS has no shared "phone root" folder like Android. The game data has to
-			// live inside the app sandbox, in the Documents folder, which is exposed to
-			// Finder/iTunes file sharing and the Files app (see the
-			// user_data/accessible_from_* options in the iOS export preset).
-			string docs = OS.GetSystemDir(OS.SystemDir.Documents);
-			if (!docs.EndsWith("/"))
-			{
-				docs += "/";
-			}
-			Wa2Resource.ResPath = docs + "Wa2Res/";
+			// iOS has no shared "phone root" folder like Android; the data has to
+			// live inside the app sandbox.
+			//
+			// Use user:// (OS.GetUserDataDir()). With the
+			// user_data/accessible_from_files_app export option enabled this IS
+			// the container the Files app / iTunes file sharing shows, so it is
+			// where the user drops the Wa2Res folder.
+			//
+			// Do NOT use OS.GetSystemDir(OS.SystemDir.Documents) here: iOS never
+			// overrides it, so the base OS implementation returns "." and the
+			// game ends up looking for "./Wa2Res/" inside the read-only bundle.
+			string userDir = OS.GetUserDataDir();
+			string resourceRoot = userDir.PathJoin("Wa2Res");
+			string icPath = resourceRoot.PathJoin("IC");
+			string moviePath = resourceRoot.PathJoin("movie");
+			string savePath = userDir.PathJoin("sav");
 
-			if (!DirAccess.DirExistsAbsolute(Wa2Resource.ResPath))
-			{
-				DirAccess.MakeDirAbsolute(Wa2Resource.ResPath);
-			}
-			SavPath = Wa2Resource.ResPath + "sav/";
-			if (!DirAccess.DirExistsAbsolute(SavPath))
-			{
-				DirAccess.MakeDirAbsolute(SavPath);
-			}
+			// Created up front so the folders exist before the first copy, and
+			// so a missing subfolder cannot break pak loading later.
+			DirAccess.MakeDirRecursiveAbsolute(resourceRoot);
+			DirAccess.MakeDirRecursiveAbsolute(icPath);
+			DirAccess.MakeDirRecursiveAbsolute(moviePath);
+			DirAccess.MakeDirRecursiveAbsolute(savePath);
+
+			// Saves live next to Wa2Res, not inside it, so re-copying the game
+			// data never wipes them.
+			Wa2Resource.ResPath = resourceRoot + "/";
+			SavPath = savePath + "/";
+
+			GD.Print("[wa2] iOS user dir : ", userDir);
+			GD.Print("[wa2] iOS res path : ", Wa2Resource.ResPath);
+			GD.Print("[wa2] iOS sav path : ", SavPath);
 		}
 		else
 		{
@@ -525,12 +537,25 @@ public partial class Wa2EngineMain : Control
 		Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 		Wa2Encoding = new();
 		Wa2Def.LoadFontMap();
-		if (!System.IO.Directory.Exists(ProjectSettings.GlobalizePath(Wa2Resource.ResPath)))
+		// Report the real, globalized path - on iOS ResPath is already absolute,
+		// but a relative one (e.g. "./Wa2Res/") globalizes against the app
+		// bundle and the message becomes impossible to act on.
+		string resDir = ProjectSettings.GlobalizePath(Wa2Resource.ResPath);
+		GD.Print("[wa2] res dir      : ", resDir);
+		if (!System.IO.Directory.Exists(resDir))
 		{
-			OpenErrorMessage("资源文件夹不存在,\n路径" + Wa2Resource.ResPath);
+			OpenErrorMessage("资源文件夹不存在,\n路径" + resDir);
 		}
 		else
 		{
+			// Very useful when the folder is there but the pak files are not:
+			// shows what the app can actually see from inside the sandbox.
+			GD.Print("[wa2] res dir entries:");
+			foreach (string entry in System.IO.Directory.EnumerateFileSystemEntries(resDir))
+			{
+				GD.Print("[wa2]   ", entry);
+			}
+
 			Wa2Resource.LoadPak("BGM.PAK");
 			Wa2Resource.LoadPak("IC/BGM.PAK");
 			Wa2Resource.LoadPak("IC/bak.pak");

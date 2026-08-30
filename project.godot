@@ -10,7 +10,10 @@ config_version=5
 
 [application]
 
-config/name="wa2"
+; Shown as the folder name in the iOS Files app / iTunes file sharing, so make
+; it recognisable. The iOS preset override of application/config/name did not
+; take effect (the built bundle still came out as "wa2").
+config/name="White Album 2"
 run/main_scene="uid://bblla2fup6lge"
 config/features=PackedStringArray("4.5", "C#", "Mobile")
 boot_splash/bg_color=Color(0, 0, 0, 1)
