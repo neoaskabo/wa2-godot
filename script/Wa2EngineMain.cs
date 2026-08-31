@@ -520,6 +520,41 @@ public partial class Wa2EngineMain : Control
 		}
 
 	}
+	/// Writes the bits of environment that differ between a dev machine and a
+	/// sideloaded iPhone, so a "works here, not there" bug is diagnosable from
+	/// the log file alone.
+	private void LogEnvironment()
+	{
+		Wa2Log.Write("[wa2] os name       : " + OS.GetName());
+		Wa2Log.Write("[wa2] user data dir : " + OS.GetUserDataDir());
+		Wa2Log.Write("[wa2] bundle res    : " + ProjectSettings.GlobalizePath("res://"));
+		Wa2Log.Write("[wa2] exec path     : " + OS.GetExecutablePath());
+	}
+
+	/// Lists one directory level into the log. Wrapped because a missing or
+	/// unreadable directory must never take the startup path down with it.
+	private void LogDirectoryListing(string dir)
+	{
+		string real = ProjectSettings.GlobalizePath(dir);
+		Wa2Log.Write("[wa2] listing       : " + real);
+		try
+		{
+			if (!System.IO.Directory.Exists(real))
+			{
+				Wa2Log.Write("[wa2]   <directory does not exist>");
+				return;
+			}
+			foreach (string entry in System.IO.Directory.EnumerateFileSystemEntries(real))
+			{
+				Wa2Log.Write("[wa2]   " + entry);
+			}
+		}
+		catch (System.Exception e)
+		{
+			Wa2Log.Write("[wa2]   listing failed: " + e.Message);
+		}
+	}
+
 	public void InitGame()
 	{
 
