@@ -1014,6 +1014,13 @@ public partial class Wa2EngineMain : Control
 			{
 				return;
 			}
+			if (!VideoPlayer.IsOpen())
+			{
+				_movieLoading = false;
+				_movieLoadingName = "";
+				OnVideoFinished();
+				return;
+			}
 
 			_movieLoading = false;
 			_movieLoadingName = "";
