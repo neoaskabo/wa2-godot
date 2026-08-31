@@ -1011,29 +1011,6 @@ public partial class Wa2EngineMain : Control
 		}
 	}
 
-	// Forward a tap/click in the ADV main game to ClickAdv. Shared by the mouse
-	// path (desktop) and the touch path (iOS): on a phone a tap arrives as
-	// InputEventScreenTouch, not a mouse button, so both must drive the engine.
-	private void AdvClickFromInput()
-	{
-		bool flag = true;
-		IsClick = true;
-		if (SkipMode && AdvMain.Visible)
-		{
-			StopSkip();
-			flag = false;
-		}
-		if (!AdvMain.Visible && !VideoPlayer.IsPlaying && UiMgr.UiQueue.Peek() == UiMgr.AdvMain && AdvMain.State == Wa2AdvMain.AdvState.HIDE)
-		{
-			AdvMain.Show();
-			AdvMain.State = Wa2AdvMain.AdvState.WAIT_CLICK;
-			flag = false;
-		}
-		if (flag)
-		{
-			ClickAdv(true);
-		}
-	}
 	public override void _GuiInput(InputEvent @event)
 	{
 		switch (State)
@@ -1060,37 +1037,49 @@ public partial class Wa2EngineMain : Control
 				}
 				break;
 		case GameState.GAME:
-			// iOS / touch: a tap arrives as InputEventScreenTouch, not a mouse
-			// button. Forward it as an ADV click so the story advances.
-			if (@event is InputEventScreenTouch touch)
+			// iOS fix (faithful to the proven 0.1.8 port Gdadfk/wa2-godot-ios):
+			// on a phone a tap is delivered as InputEventScreenTouch, but with
+			// input_devices/pointing/emulate_mouse_from_touch=true (set in
+			// project.godot) Godot also emits the equivalent
+			// InputEventMouseButton(Left). The original upstream code only
+			// advances the ADV on that mouse button, so this branch stays
+			// touch-only (sets IsPressed) to avoid a single tap firing ClickAdv
+			// twice.
+			if (@event is InputEventScreenTouch && @event.IsPressed())
 			{
-				if (touch.Pressed)
-				{
-					IsPressed = true;
-					AdvClickFromInput();
-				}
-				else
-				{
-					IsPressed = false;
-					PressedTime = 0.0;
-					IsClick = false;
-				}
+				IsPressed = true;
 			}
 			else
 			{
 				IsPressed = false;
-				if (!IsPressed)
+			}
+			if (!IsPressed)
+			{
+				PressedTime = 0.0;
+			}
+			if (@event is InputEventMouseButton && (@event as InputEventMouseButton).ButtonIndex == MouseButton.Left && @event.IsPressed())
+			{
+				bool flag = true;
+				IsClick = true;
+				if (SkipMode && AdvMain.Visible)
 				{
-					PressedTime = 0.0;
+					StopSkip();
+					flag = false;
 				}
-				if (@event is InputEventMouseButton mouse && mouse.ButtonIndex == MouseButton.Left && mouse.IsPressed())
+				if (!AdvMain.Visible && !VideoPlayer.IsPlaying && UiMgr.UiQueue.Peek() == UiMgr.AdvMain && AdvMain.State == Wa2AdvMain.AdvState.HIDE)
 				{
-					AdvClickFromInput();
+					AdvMain.Show();
+					AdvMain.State = Wa2AdvMain.AdvState.WAIT_CLICK;
+					flag = false;
 				}
-				else if (@event is InputEventMouseButton)
+				if (flag)
 				{
-					IsClick = false;
+					ClickAdv(true);
 				}
+			}
+			else
+			{
+				IsClick = false;
 			}
 			break;
 		}
