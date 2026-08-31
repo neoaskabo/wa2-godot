@@ -425,7 +425,7 @@ public partial class Wa2EngineMain : Control
 			{
 				if (!(ui as BasePage).AnimationPlayer.IsPlaying())
 				{
-					SoundMgr.PlaySysSe(ResourceLoader.Load<AudioStream>("res://assets/se/SE_9213.wav"));
+					SoundMgr.PlaySysSe(ResourceLoader.Load<AudioStream>("res://assets/se/SE_9213.WAV"));
 					(ui as BasePage).Close();
 				}
 
@@ -437,7 +437,7 @@ public partial class Wa2EngineMain : Control
 					UiMgr.UIConfirm.Close();
 					UiMgr.OpenTitleMenu();
 				});
-				SoundMgr.PlaySysSe(ResourceLoader.Load<AudioStream>("res://assets/se/SE_9213.wav"));
+				SoundMgr.PlaySysSe(ResourceLoader.Load<AudioStream>("res://assets/se/SE_9213.WAV"));
 			}
 		}
 	}
