@@ -1011,6 +1011,29 @@ public partial class Wa2EngineMain : Control
 		}
 	}
 
+	// Forward a tap/click in the ADV main game to ClickAdv. Shared by the mouse
+	// path (desktop) and the touch path (iOS): on a phone a tap arrives as
+	// InputEventScreenTouch, not a mouse button, so both must drive the engine.
+	private void AdvClickFromInput()
+	{
+		bool flag = true;
+		IsClick = true;
+		if (SkipMode && AdvMain.Visible)
+		{
+			StopSkip();
+			flag = false;
+		}
+		if (!AdvMain.Visible && !VideoPlayer.IsPlaying && UiMgr.UiQueue.Peek() == UiMgr.AdvMain && AdvMain.State == Wa2AdvMain.AdvState.HIDE)
+		{
+			AdvMain.Show();
+			AdvMain.State = Wa2AdvMain.AdvState.WAIT_CLICK;
+			flag = false;
+		}
+		if (flag)
+		{
+			ClickAdv(true);
+		}
+	}
 	public override void _GuiInput(InputEvent @event)
 	{
 		switch (State)
@@ -1036,44 +1059,40 @@ public partial class Wa2EngineMain : Control
 					}
 				}
 				break;
-			case GameState.GAME:
-				if (@event is InputEventScreenTouch && @event.IsPressed())
+		case GameState.GAME:
+			// iOS / touch: a tap arrives as InputEventScreenTouch, not a mouse
+			// button. Forward it as an ADV click so the story advances.
+			if (@event is InputEventScreenTouch touch)
+			{
+				if (touch.Pressed)
 				{
 					IsPressed = true;
+					AdvClickFromInput();
 				}
 				else
 				{
 					IsPressed = false;
+					PressedTime = 0.0;
+					IsClick = false;
 				}
+			}
+			else
+			{
+				IsPressed = false;
 				if (!IsPressed)
 				{
 					PressedTime = 0.0;
 				}
-				if (@event is InputEventMouseButton && (@event as InputEventMouseButton).ButtonIndex == MouseButton.Left && @event.IsPressed())
+				if (@event is InputEventMouseButton mouse && mouse.ButtonIndex == MouseButton.Left && mouse.IsPressed())
 				{
-					bool flag = true;
-					IsClick = true;
-					if (SkipMode && AdvMain.Visible)
-					{
-						StopSkip();
-						flag = false;
-					}
-					if (!AdvMain.Visible && !VideoPlayer.IsPlaying && UiMgr.UiQueue.Peek() == UiMgr.AdvMain && AdvMain.State == Wa2AdvMain.AdvState.HIDE)
-					{
-						AdvMain.Show();
-						AdvMain.State = Wa2AdvMain.AdvState.WAIT_CLICK;
-						flag = false;
-					}
-					if (flag)
-					{
-						ClickAdv(true);
-					}
+					AdvClickFromInput();
 				}
-				else
+				else if (@event is InputEventMouseButton)
 				{
 					IsClick = false;
 				}
-				break;
+			}
+			break;
 		}
 	}
 	public void StopAutoMode()
