@@ -55,7 +55,8 @@ App 的 Documents 目录已通过两个导出选项对外暴露：
 首次启动会自动创建 `Wa2Res/`、`Wa2Res/IC/`、`Wa2Res/movie/` 和 `sav/`。
 存档放在 `sav/`（与 `Wa2Res/` 平级），这样重新覆盖游戏数据不会清掉进度。
 
-排查时可以在 Xcode 控制台里看这几行日志：
+排查时可以看这几行日志。除了 Xcode 控制台，App 还会把它们写进
+`Documents/wa2-log.txt`，用「文件」App 就能取回，不必连线：
 
 ```
 [wa2] iOS user dir : /var/mobile/Containers/Data/Application/.../Documents
@@ -64,6 +65,50 @@ App 的 Documents 目录已通过两个导出选项对外暴露：
 [wa2] res dir entries:
 [wa2]   .../Documents/Wa2Res/BGM.PAK
 ```
+
+### 排查：雪花是白方块、点标题后黑屏
+
+**这两个是同一个原因：PCK 里根本没有美术资源。**
+
+上游 `.gitignore` 排除了 `assets/grp/`、`assets/se/`、`assets/fonts/cn/`、
+`assets/fonts/jp/`（都是从游戏里提取的素材）。`git clone` 下来这些目录是空的，
+于是 Godot 导出的 PCK 缺了 132 个文件。在已构建的 PCK 里核对：
+
+| 关键字 | 在 PCK 中的出现次数 |
+|--------|------------------|
+| `main.tscn` | 2 |
+| `.gdshader` | 25 |
+| `font.map` | 1 |
+| `weather.png` | **0** |
+
+后果：
+
+- `res://assets/grp/weather.png` 取不到 → `AtlasTexture.Atlas` 为 null →
+  `GPUParticles2D` 退化成默认白色方块
+- 标题和菜单用的 `T*.png`、`sys_*.png` 全部缺失 → 画面全黑
+
+**资源不入库，而是在编译期还原。** `tools/extract_assets.py` 从上游官方
+Android APK 里把资源无损取回来 —— APK 里存的是 Godot 的导入产物：
+
+```
+assets/assets/<相对路径>.import           → 记录原始路径
+assets/.godot/imported/<名字>-<md5>.ctex → "GST2" 魔数 + 56 字节头 + 图片数据
+```
+
+因为是无损存储（91 个 WebP、39 个 PNG），可以原样还原。
+
+两个坑：
+
+1. **APK 的 zip 没有设 UTF-8 标志位**，Python 的 `zipfile` 会按 cp437 解码，
+   `assets/grp/煙.png` 会变成乱码。要手动 `name.encode('cp437').decode('utf-8')`
+   再解回去，否则中文/日文文件名的资源会整批丢失。
+2. `assets/se/*.WAV` 在 APK 里只有 Godot 的 `.sample` 二进制资源，解不划算，
+   所以脚本合成短促的按键音代替 —— 缺的是 ext_resource，会让
+   `BasePage.tscn` 这类场景加载失败。
+
+`assets/grp/sys_01013.png` 是位图字体（`importer="font_data_image"`），
+APK 里只剩烘焙后的 FontFile，源图拿不回来，用透明占位图代替，
+存档列表的文字会退回默认字体。
 
 ---
 

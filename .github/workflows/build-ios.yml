@@ -66,10 +66,11 @@ jobs:
           # They are recovered losslessly from upstream's official Android APK,
           # which ships them in Godot's imported form. This keeps game assets
           # out of git history while still producing a complete build.
-          python3 -m pip install --quiet Pillow
+          # No pip: the runner's Python is marked externally managed (PEP 668),
+          # so `pip install Pillow` is unreliable. The script decodes the WebP
+          # textures with the macOS `sips` CLI instead and only falls back to
+          # Pillow on other platforms.
           python3 tools/extract_assets.py --tag "${UPSTREAM_TAG}" --out .
-          echo "--- restored ---"
-          find assets -type f | wc -l
 
       - name: Setup .NET 9
         uses: actions/setup-dotnet@v4

@@ -67,9 +67,41 @@ def fetch_apk(tag, dest, local=None):
         shutil.copyfile(local, dest)
         return
     url = APK_URL.format(tag=tag)
-    log(f"downloading {url}")
-    urllib.request.urlretrieve(url, dest)
-    log(f"downloaded {os.path.getsize(dest) / 1e6:.1f} MB")
+    # curl, not urllib: reading this 130 MB body through urlopen stalls
+    # indefinitely part-way through, while curl streams it in ~30 s.
+    last = None
+    for attempt in range(1, 4):
+        log(f"downloading {url} (attempt {attempt}/3)")
+        if shutil.which("curl") is not None:
+            r = subprocess.run(
+                ["curl", "-sSL", "--fail", "--retry", "3", "--max-time", "600", "-o", dest, url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+            )
+            if r.returncode == 0:
+                size = os.path.getsize(dest) if os.path.exists(dest) else 0
+                if size > 10_000_000:
+                    log(f"downloaded {size / 1e6:.1f} MB")
+                    return
+                last = f"suspiciously small: {size} bytes"
+            else:
+                last = r.stderr.decode("utf-8", "replace").strip()[:200]
+        else:
+            try:
+                req = urllib.request.Request(
+                    url, headers={"User-Agent": "wa2-asset-extract/1.0"}
+                )
+                with urllib.request.urlopen(req, timeout=300) as resp, open(dest, "wb") as f:
+                    shutil.copyfileobj(resp, f)
+                size = os.path.getsize(dest)
+                if size > 10_000_000:
+                    log(f"downloaded {size / 1e6:.1f} MB")
+                    return
+                last = f"suspiciously small: {size} bytes"
+            except Exception as exc:  # noqa: BLE001 - surface as a clean CI error
+                last = f"{type(exc).__name__}: {exc}"
+        log(f"  failed: {last}")
+    raise SystemExit(f"could not download the upstream APK: {last}")
 
 
 def _zip_name(info):
@@ -125,22 +157,63 @@ def ctex_to_bytes(path):
     return None
 
 
-def convert(payload, ext):
-    """Return PNG bytes.  Plain PNG is passed through; WebP needs Pillow."""
-    if ext == "png":
-        return payload
+def _via_sips(payload, suffix):
+    """Convert with the macOS `sips` CLI. Returns PNG bytes or None."""
+    if shutil.which("sips") is None:
+        return None
+    work = tempfile.mkdtemp(prefix="sips")
+    try:
+        src = os.path.join(work, "in." + suffix)
+        dst = os.path.join(work, "out.png")
+        with open(src, "wb") as f:
+            f.write(payload)
+        r = subprocess.run(
+            ["sips", "-s", "format", "png", src, "--out", dst],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if r.returncode != 0 or not os.path.exists(dst):
+            return None
+        with open(dst, "rb") as f:
+            return f.read()
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def _via_pillow(payload):
     try:
         from PIL import Image
     except ImportError:
-        raise SystemExit(
-            "Pillow is required to decode the WebP textures: pip install Pillow"
-        )
+        return None
     img = Image.open(io.BytesIO(payload))
     if img.mode not in ("RGB", "RGBA"):
         img = img.convert("RGBA")
     out = io.BytesIO()
     img.save(out, format="PNG")
     return out.getvalue()
+
+
+def convert(payload, ext, prefer_sips=None):
+    """Return PNG bytes.
+
+    Plain PNG is passed through untouched.  WebP needs decoding: Pillow is the
+    portable option, but installing it in CI is fragile (PEP 668 marks the
+    runner's Python as externally managed), so on macOS we prefer `sips`,
+    which ships with the OS and preserves the alpha channel.
+    """
+    if ext == "png":
+        return payload
+    if prefer_sips is None:
+        prefer_sips = sys.platform == "darwin"
+    order = ["sips", "pillow"] if prefer_sips else ["pillow", "sips"]
+    for how in order:
+        out = _via_pillow(payload) if how == "pillow" else _via_sips(payload, ext)
+        if out:
+            return out
+    # Returning None instead of raising: one undecodable sprite should not
+    # abort the whole restore. main() fails the build only if a critical
+    # asset is missing.
+    return None
 
 
 def collect_imports(assets_root):
@@ -233,6 +306,10 @@ def main():
                     continue
                 payload, ext = got
                 png = convert(payload, ext)
+                if png is None:
+                    failed += 1
+                    log(f"  MISS  {rel} (cannot decode {ext})")
+                    continue
             elif cache_name.endswith(".sample"):
                 # AudioStreamWAV: synthesise a click so the resource resolves.
                 png = None
@@ -271,7 +348,8 @@ def main():
     critical = ["assets/grp/weather.png", "assets/fonts/cn/本体80.png", "assets/se/SE_9213.WAV"]
     missing = [c for c in critical if not os.path.exists(os.path.join(out, c))]
     if missing:
-        log("WARNING missing critical assets: " + ", ".join(missing))
+        # Annotate so the reason lands in the Actions UI, not just the log tail.
+        print("::error::missing critical assets: " + ", ".join(missing), flush=True)
         return 1
     log("all critical assets present")
     return 0
