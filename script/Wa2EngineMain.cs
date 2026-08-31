@@ -505,6 +505,14 @@ public partial class Wa2EngineMain : Control
 			GD.Print("[wa2] iOS user dir : ", userDir);
 			GD.Print("[wa2] iOS res path : ", Wa2Resource.ResPath);
 			GD.Print("[wa2] iOS sav path : ", SavPath);
+
+			Wa2Log.Init(userDir);
+			LogEnvironment();
+			Wa2Log.Write("[wa2] user dir : " + userDir);
+			Wa2Log.Write("[wa2] res path : " + Wa2Resource.ResPath);
+			Wa2Log.Write("[wa2] sav path : " + SavPath);
+			LogDirectoryListing(resourceRoot);
+			Wa2Log.Flush();
 		}
 		else
 		{

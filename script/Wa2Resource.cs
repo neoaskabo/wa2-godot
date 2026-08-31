@@ -298,11 +298,23 @@ public class Wa2Resource
 
 						if ((flag & 1) == 0)
 						{
+							// The match token spans two bytes. Without this guard a
+							// token straddling the end of the stream throws
+							// IndexOutOfRangeException, which kills the whole image
+							// load (audio is stored uncompressed, so only images
+							// ever reach this branch).
+							if (insize >= inlim)
+							{
+								return buffer;
+							}
 							byte byte2 = readBuffer[insize++];
 							uint arr_r = (uint)(byte1 | (byte2 & 0xF0) << 4);
 							uint counter = (uint)(byte2 & 0xF) + 3;
 
-							while (counter-- > 0)
+							// `outsize < outlim` matters: a single match copies up to
+							// 18 bytes, so the per-token check at the top of the loop
+							// is not enough to keep the final token inside `buffer`.
+							while (counter-- > 0 && outsize < outlim)
 							{
 								byte b = arr[arr_r++ & 0xFFF];
 								arr[arr_w++ & 0xFFF] = b;
