@@ -118,7 +118,6 @@ public partial class Wa2Label : Node2D
 		int drawY = 0;
 		int lastDrawX = 0;
 		TextParseResult r = new();
-		bool wrapHold = false;
 		// int drawX = 0;
 		// int drawY = 0;
 		for (int i = 0; i < Text.Length; i++)

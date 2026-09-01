@@ -434,15 +434,15 @@ public class Wa2Resource
 				}
 			}
 		}
-		catch (System.IO.FileNotFoundException ex)
+		catch (System.IO.FileNotFoundException)
 		{
 			Wa2EngineMain.Engine.OpenErrorMessage("资源读取失败,\n文件" + fullPath + "不存在");
 		}
-		catch (System.UnauthorizedAccessException ex)
+		catch (System.UnauthorizedAccessException)
 		{
 			Wa2EngineMain.Engine.OpenErrorMessage("访问权限获取失败");
 		}
-		catch (System.IO.IOException ex)
+		catch (System.IO.IOException)
 		{
 			Wa2EngineMain.Engine.OpenErrorMessage("资源读取失败,\n文件" + fullPath + "已损坏");
 		}
