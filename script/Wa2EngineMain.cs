@@ -1,7 +1,6 @@
 using Godot;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Text;
 public class BacklogEntry
@@ -20,6 +19,42 @@ public partial class Wa2EngineMain : Control
 		JP,
 		EN
 	}
+	private static readonly string[] RequiredPakPaths =
+	{
+		"BGM.PAK",
+		"IC/BGM.PAK",
+		"IC/bak.pak",
+		"IC/grp.pak",
+		"IC/char.pak",
+		"IC/VOICE.PAK",
+		"IC/SE.PAK",
+		"bak.pak",
+		"ck-gal.pak",
+		"grp.pak",
+		"char.pak",
+		"VOICE.PAK",
+		"SE.PAK"
+	};
+	private static readonly string[] ExpectedMoviePaths =
+	{
+		"movie/mv000.ogv",
+		"movie/mv010.ogv",
+		"movie/mv020.ogv",
+		"movie/mv070.ogv",
+		"movie/mv080.ogv",
+		"movie/mv090.ogv",
+		"movie/mv100.ogv",
+		"movie/mv110.ogv",
+		"movie/mv120.ogv",
+		"movie/mv130.ogv",
+		"movie/mv140.ogv",
+		"movie/mv200.ogv",
+		"movie/mv210.ogv",
+		"movie/mv220.ogv",
+		"movie/mv230.ogv",
+		"movie/mv240.ogv"
+	};
+
 	public enum GameState
 	{
 		NONE,
@@ -79,9 +114,11 @@ public partial class Wa2EngineMain : Control
 	public bool DemoMode = false;
 	public string SavPath = "user://";
 	public Language Lang = Language.CN;
+	public bool ResourcesReady { get; private set; } = true;
+	private bool _iosMovieDirectoryWasMissing;
 
 	[Export]
-	public VideoPlayback VideoPlayer;
+	public VideoStreamPlayer VideoPlayer;
 	[Export]
 	public Node CharGroup;
 	public Wa2Image[] Chars;
@@ -114,9 +151,6 @@ public partial class Wa2EngineMain : Control
 	private double SakuraWeatherAnimationTime = 0.0;
 	private int SakuraWeatherFrame = -1;
 	public bool HasPlayMovie = false;
-	private bool _movieLoading = false;
-	private string _movieLoadingName = "";
-	private int _movieRequestId = 0;
 	public GameState State = GameState.NONE;
 	public Wa2WaitTimer WaitTimer = new();
 	public Wa2Timer AutoTimer = new();
@@ -148,6 +182,12 @@ public partial class Wa2EngineMain : Control
 	public int[] GameFlags = new int[0x1d];
 	public double ScriptDelta = 0.0f;
 	public double FrameDelta = 0.0f;
+	// iOS 不接受 wmv_video 的原生库（仓库只随附 android/windows 二进制，
+	// 且 FFmpeg 的 LGPL 静态链接与 iOS 分发条款冲突），因此改用 Godot 原生的
+	// VideoStreamPlayer + VideoStreamTheora 软解码 Ogg Theora 文件，
+	// 放在 Wa2Res/movie/ 下。这与已验证可运行的 iOS 移植版做法一致。
+	private static readonly string[] IosMovieExtensions = { ".ogv", ".ogg" };
+
 	// 1. 定义映射表（建议作为类成员，避免每次调用都重新创建）
 	private static readonly Dictionary<string, string> VideoPathMap = new Dictionary<string, string>
 {
@@ -174,6 +214,20 @@ public partial class Wa2EngineMain : Control
 
 		// 统一转小写进行匹配，无论输入是 MV00 还是 mv00 都能找到
 		string key = name.ToLower();
+
+		// iOS：优先在 Wa2Res/movie/ 下找 Ogg Theora 文件（mv000.ogv / mv000.ogg）
+		if (OS.GetName() == "iOS")
+		{
+			foreach (string ext in IosMovieExtensions)
+			{
+				string rel = "movie/" + key + "0" + ext;
+				if (FileAccess.FileExists(Wa2Resource.ResPath + rel))
+				{
+					return rel;
+				}
+			}
+			return "";
+		}
 
 		if (VideoPathMap.TryGetValue(key, out string fileName))
 		{
@@ -257,7 +311,7 @@ public partial class Wa2EngineMain : Control
 		// GD.Print("和纱浮气度:", GameSav.GameFlags[6]);
 		// GD.Print("雪菜好意度:", GameSav.GameFlags[7]);
 		int idx = int.Parse(Script.ScriptName);
-		SelectIdx = Script.Args[^1].Get() + 4 * Array.IndexOf(Wa2Def.SelectScript, idx) + 900;
+		SelectIdx = Script.Args[^1].GetInt() + 4 * Array.IndexOf(Wa2Def.SelectScript, idx) + 900;
 		AdvMain.SelectMessageContainer.Show();
 		for (int i = 0; i < 3; i++)
 		{
@@ -422,7 +476,7 @@ public partial class Wa2EngineMain : Control
 				}
 
 			}
-			else if (ui == UiMgr.AdvMain && State == GameState.GAME && !AnimatorMgr.WaitAnimation() && !VideoPlayer.IsPlaying && AdvMain.State == Wa2AdvMain.AdvState.WAIT_CLICK)
+			else if (ui == UiMgr.AdvMain && State == GameState.GAME && !AnimatorMgr.WaitAnimation() && !VideoPlayer.IsPlaying() && AdvMain.State == Wa2AdvMain.AdvState.WAIT_CLICK)
 			{
 				UiMgr.OpenConfirm("返回主菜单\n确认吗", "", true, () =>
 				{
@@ -440,7 +494,8 @@ public partial class Wa2EngineMain : Control
 		
 		GetTree().SetQuitOnGoBack(false);
 		GameSav = new(this);
-		if (OS.GetName() == "Android")
+		string platform = OS.GetName();
+		if (platform == "Android")
 		{
 
 			for (int i = 0; i < 100; i++)
@@ -463,9 +518,46 @@ public partial class Wa2EngineMain : Control
 			// await ToSignal(GetTree(), SceneTree.SignalName.OnRequestPermissionsResult);
 			// }
 		}
+		else if (platform == "iOS")
+		{
+			string resourceRoot = OS.GetUserDataDir().PathJoin("Wa2Res");
+			string icPath = resourceRoot.PathJoin("IC");
+			string moviePath = resourceRoot.PathJoin("movie");
+			string savePath = OS.GetUserDataDir().PathJoin("sav");
+
+			_iosMovieDirectoryWasMissing = !DirAccess.DirExistsAbsolute(moviePath);
+			DirAccess.MakeDirRecursiveAbsolute(icPath);
+			DirAccess.MakeDirRecursiveAbsolute(moviePath);
+			DirAccess.MakeDirRecursiveAbsolute(savePath);
+
+			Wa2Resource.ResPath = resourceRoot + "/";
+			SavPath = savePath + "/";
+		}
 		else
 		{
 			Wa2Resource.ResPath = "res://assets/";
+		}
+
+	}
+	private void ValidateIosMovies()
+	{
+		List<string> missingMovies = ExpectedMoviePaths
+			.Where(path => !FileAccess.FileExists(Wa2Resource.ResPath + path))
+			.Select(path => path.Substring("movie/".Length))
+			.ToList();
+
+		if (!_iosMovieDirectoryWasMissing && missingMovies.Count == 0)
+		{
+			return;
+		}
+
+		if (_iosMovieDirectoryWasMissing)
+		{
+			OpenErrorMessage("movie文件夹不存在,\n已自动创建，游戏仍可进入");
+		}
+		else if (missingMovies.Count > 0)
+		{
+			OpenErrorMessage($"MV缺失，游戏将自动跳过,\n文件{missingMovies[0]}不存在");
 		}
 
 	}
@@ -494,11 +586,32 @@ public partial class Wa2EngineMain : Control
 		Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 		Wa2Encoding = new();
 		Wa2Def.LoadFontMap();
-		if (!System.IO.Directory.Exists(ProjectSettings.GlobalizePath(Wa2Resource.ResPath)))
+
+		bool loadPaks = true;
+		if (OS.GetName() == "iOS")
+		{
+			List<string> missingPaks = RequiredPakPaths
+				.Where(path => !FileAccess.FileExists(Wa2Resource.ResPath + path))
+				.ToList();
+			ResourcesReady = missingPaks.Count == 0;
+			loadPaks = ResourcesReady;
+
+			if (!ResourcesReady)
+			{
+				OpenErrorMessage($"资源读取失败,\n文件{missingPaks[0]}不存在");
+			}
+			else
+			{
+				ValidateIosMovies();
+			}
+		}
+		else if (!DirAccess.DirExistsAbsolute(Wa2Resource.ResPath))
 		{
 			OpenErrorMessage("资源文件夹不存在,\n路径" + Wa2Resource.ResPath);
+			loadPaks = false;
 		}
-		else
+
+		if (loadPaks)
 		{
 			Wa2Resource.LoadPak("BGM.PAK");
 			Wa2Resource.LoadPak("IC/BGM.PAK");
@@ -522,6 +635,7 @@ public partial class Wa2EngineMain : Control
 			Wa2Resource.LoadPak("VOICE.PAK");
 			Wa2Resource.LoadPak("SE.PAK");
 		}
+		UiMgr.TitleMenu.SetResourcesReady(ResourcesReady);
 		// VideoPlayer.Finished += OnVideoFinished;
 		AdvMain.Init(this);
 		Chars = new Wa2Image[Wa2Def.CharPos.Length];
@@ -539,7 +653,7 @@ public partial class Wa2EngineMain : Control
 			// GD.Print(Chars[i].GetNextOffset());
 			// CharGroup.AddChild(Chars[i]);
 		}
-		VideoPlayer.VideoEnded += OnVideoFinished;
+		VideoPlayer.Finished += OnVideoFinished;
 		State = GameState.LOGO;
 		// GD.Print(Time.GetTicksMsec());
 		// GetTree().ChangeSceneToFile("res://scene/as/title_menu.tscn");
@@ -557,7 +671,7 @@ public partial class Wa2EngineMain : Control
 			}
 			if (CanSkip() || ClickedInWait)
 			{
-				if (VideoPlayer.IsPlaying)
+				if (VideoPlayer.IsPlaying())
 				{
 					if (!HasPlayMovie || !click)
 					{
@@ -688,10 +802,8 @@ public partial class Wa2EngineMain : Control
 	}
 	public void HideVideo()
 	{
-		_movieRequestId++;
-		_movieLoading = false;
-		_movieLoadingName = "";
-		VideoPlayer.Close();
+		VideoPlayer.Stop();
+		VideoPlayer.Stream = null;
 		VideoPlayer.Hide();
 		WaitTimer.DeActive();
 	}
@@ -797,7 +909,6 @@ public partial class Wa2EngineMain : Control
 		}
 		else if (State == GameState.GAME)
 		{
-
 			InputKeyHandling();
 			UpdateTimer(delta);
 			UpdateFrame(delta);
@@ -816,14 +927,20 @@ public partial class Wa2EngineMain : Control
 		{
 			return;
 		}
-		if (AdvMain.State != Wa2AdvMain.AdvState.PARSE_TEXT && !AutoTimer.IsActive() && !WaitTimer.IsActive() && !CanSkip() && !AdvMain.SelectMessageContainer.Visible && (AdvMain.State == Wa2AdvMain.AdvState.END || AdvMain.State == Wa2AdvMain.AdvState.FADE_OUT || (DemoMode && AdvMain.State == Wa2AdvMain.AdvState.WAIT_CLICK)) && UiMgr.UiQueue.Peek() == UiMgr.AdvMain)
-		{
 
-			bool flag = !AnimatorMgr.WaitAnimation();
-			if (flag)
-			{
-				ScriptParse();
-			}
+		if (AdvMain.State != Wa2AdvMain.AdvState.PARSE_TEXT
+			&& !AutoTimer.IsActive()
+			&& !WaitTimer.IsActive()
+			&& !CanSkip()
+			&& !AdvMain.SelectMessageContainer.Visible
+			&& (AdvMain.State == Wa2AdvMain.AdvState.END
+				|| AdvMain.State == Wa2AdvMain.AdvState.FADE_OUT
+				|| (DemoMode && AdvMain.State == Wa2AdvMain.AdvState.WAIT_CLICK))
+			&& UiMgr.UiQueue.Count > 0
+			&& UiMgr.UiQueue.Peek() == UiMgr.AdvMain
+			&& !AnimatorMgr.WaitAnimation())
+		{
+			ScriptParse();
 		}
 	}
 	public bool CanSkip()
@@ -922,7 +1039,7 @@ public partial class Wa2EngineMain : Control
 			case GameState.OP:
 				if (@event is InputEventMouseButton && (@event as InputEventMouseButton).ButtonIndex == MouseButton.Left && @event.IsPressed())
 				{
-					if (VideoPlayer.IsPlaying && VideoPlayer.CurrentFrame > 0)
+					if (VideoPlayer.IsPlaying() && VideoPlayer.StreamPosition > 0)
 					{
 						HideVideo();
 						// WaitTimer.DeActive();
@@ -959,7 +1076,7 @@ public partial class Wa2EngineMain : Control
 						StopSkip();
 						flag = false;
 					}
-					if (!AdvMain.Visible && !VideoPlayer.IsPlaying && UiMgr.UiQueue.Peek() == UiMgr.AdvMain && AdvMain.State == Wa2AdvMain.AdvState.HIDE)
+					if (!AdvMain.Visible && !VideoPlayer.IsPlaying() && UiMgr.UiQueue.Peek() == UiMgr.AdvMain && AdvMain.State == Wa2AdvMain.AdvState.HIDE)
 					{
 						AdvMain.Show();
 						AdvMain.State = Wa2AdvMain.AdvState.WAIT_CLICK;
@@ -984,51 +1101,23 @@ public partial class Wa2EngineMain : Control
 		AutoTimer.DeActive();
 
 	}
-	public async void PlayMovie(string name)
+	public void PlayMovie(string name)
 	{
-		if (_movieLoading)
-		{
-			if (_movieLoadingName == name)
-			{
-				return;
-			}
-
-			_movieRequestId++;
-			_movieLoading = false;
-			_movieLoadingName = "";
-		}
-
 		string videoPath = Wa2Resource.ResPath + GetVideoPath(name);
 		if (!FileAccess.FileExists(videoPath))
 		{
 			OnVideoFinished();
-		}
-		else
-		{
-			_movieLoading = true;
-			_movieLoadingName = name;
-			int requestId = ++_movieRequestId;
-			VideoPlayer.SetVideoPath(videoPath);
-			await ToSignal(VideoPlayer, VideoPlayback.SignalName.VideoLoaded);
-			if (requestId != _movieRequestId || !_movieLoading || _movieLoadingName != name)
-			{
-				return;
-			}
-			if (!VideoPlayer.IsOpen())
-			{
-				_movieLoading = false;
-				_movieLoadingName = "";
-				OnVideoFinished();
-				return;
-			}
-
-			_movieLoading = false;
-			_movieLoadingName = "";
-			WaitTimer.Start((float)VideoPlayer.GetVideoLength());
-			VideoPlayer.Play();
-			VideoPlayer.Show();
+			return;
 		}
 
+		// Godot 原生的 VideoStreamTheora 是 CPU 软解码，Stream 一赋值即可读取
+		// 时长并播放，不需要像 wmv_video 那样等待异步加载完成。
+		VideoStreamTheora stream = new VideoStreamTheora();
+		stream.File = videoPath;
+		VideoPlayer.Stream = stream;
+		WaitTimer.Start((float)VideoPlayer.GetStreamLength());
+		VideoPlayer.Play();
+		VideoPlayer.Show();
 	}
 	// public void Load
 	public void RenderImage(int id, int efc, bool updateChar, int type, int frame, int offset, int x, int y, float scaleX, float ScaleY)
@@ -1037,7 +1126,12 @@ public partial class Wa2EngineMain : Control
 		BgInfo.Type = type;
 		AnimatorMgr.FinishAll(true);
 		Texture2D NextTexture;
-		Texture2D CeacheTexture = ImageTexture.CreateFromImage(Viewport.GetTexture().GetImage());
+		Texture2D CeacheTexture = null;
+		bool needsSnapshot = !updateChar && frame > 0;
+		if (needsSnapshot)
+		{
+			CeacheTexture = ImageTexture.CreateFromImage(Viewport.GetTexture().GetImage());
+		}
 		Wa2Image targetTexture;
 		if (updateChar)
 		{
@@ -1062,9 +1156,9 @@ public partial class Wa2EngineMain : Control
 			else
 			{
 				BgInfo.Path = string.Format("B{0:D4}{1:D1}{2:D1}.tga", id / 10, id % 10, TimeMode);
+				}
+				NextTexture = Wa2Resource.GetTgaImage(BgInfo.Path);
 			}
-			NextTexture = Wa2Resource.GetTgaImage(BgInfo.Path);
-		}
 		else
 		{
 			NextTexture = BgTexture.GetCurTexture();
@@ -1080,9 +1174,21 @@ public partial class Wa2EngineMain : Control
 		}
 		BgInfo.Offset = new Vector2(x - offset, y);
 		BgInfo.Scale = new Vector2(scaleX, ScaleY);
-		targetTexture.SetNextTexture(NextTexture);
+			targetTexture.SetNextTexture(NextTexture);
 
-		if (!updateChar)
+		if (!updateChar && frame <= 0)
+		{
+			MaskTexture.SetCurTexture(null);
+			MaskTexture.SetNextTexture(null);
+			MaskTexture.SetBlend(0);
+			MaskTexture.Hide();
+			BgTexture.SetCurOffset(BgInfo.Offset);
+			BgTexture.SetCurScale(BgInfo.Scale);
+			BgTexture.SetCurTexture(NextTexture);
+			BgTexture.SetNextTexture(null);
+			BgTexture.SetBlend(0);
+		}
+		else if (!updateChar)
 		{
 			// MaskTexture.SetCurTexture(CeacheTexture);
 			MaskTexture.SetCurOffset(Vector2.Zero);
@@ -1090,6 +1196,14 @@ public partial class Wa2EngineMain : Control
 			MaskTexture.SetNextOffset(BgInfo.Offset);
 			MaskTexture.SetNextScale(BgInfo.Scale);
 			AnimatorMgr.AddMaskFeadAnimation(MaskTexture, BgTexture, BgInfo, frame * FrameTime);
+		}
+		else if (frame <= 0)
+		{
+			BgTexture.SetCurOffset(BgInfo.Offset);
+			BgTexture.SetCurScale(BgInfo.Scale);
+			BgTexture.SetCurTexture(NextTexture);
+			BgTexture.SetNextTexture(null);
+			BgTexture.SetBlend(0);
 		}
 		else
 		{
@@ -1100,11 +1214,10 @@ public partial class Wa2EngineMain : Control
 			UpdateChar(frame * FrameTime);
 		}
 		else
-		{
-			ClearChar(frame * FrameTime);
+			{
+				ClearChar(frame * FrameTime);
+			}
 		}
-
-	}
 	public bool ClearChar(float time)
 	{
 		for (int i = 0; i < Chars.Length; i++)
@@ -1113,7 +1226,17 @@ public partial class Wa2EngineMain : Control
 			{
 				continue;
 			}
-			AnimatorMgr.AddCharFeadAnimation(Chars[i], null, time);
+			if (time > 0)
+			{
+				AnimatorMgr.AddCharFeadAnimation(Chars[i], null, time);
+			}
+			else
+			{
+				Chars[i].SetCurTexture(null);
+				Chars[i].SetNextTexture(null);
+				Chars[i].SetBlend(0);
+				Chars[i].Hide();
+			}
 		}
 		CharItems.Clear();
 		return false;

@@ -25,6 +25,14 @@ public class Wa2Var
 	public int Value0;
 	public int IntValue;
 	public float FloatValue;
+	public bool IsFloat
+	{
+		get
+		{
+			return ValType == ValueType.FLOAT ||
+				(CmdType == CmdType.LOCAL_VAR && IntValue >= 26);
+		}
+	}
 	static public Wa2Var CreateEmpty()
 	{
 		Wa2Var var = new()
@@ -35,7 +43,7 @@ public class Wa2Var
 		};
 		return var;
 	}
-	public void Set(dynamic value)
+	public void SetInt(int value)
 	{
 		if (CmdType == CmdType.GLOBAL_VAR)
 		{
@@ -48,19 +56,9 @@ public class Wa2Var
 
 			}
 			Wa2EngineMain.Engine.GameFlags[IntValue] = value;
-
 		}
 		if (CmdType == CmdType.LOCAL_VAR)
 		{
-			// if (!(value is int))
-			// {
-			// 	GD.Print("浮点");
-			// 	GD.Print(Wa2EngineMain.Engine.GameSav.ScriptPos);
-			// }
-			// else
-			// {
-			// 	GD.Print("整数");
-			// }
 			if (IntValue >= 26)
 			{
 				Wa2EngineMain.Engine.Script.GloFloats[IntValue % 26] = value;
@@ -72,20 +70,73 @@ public class Wa2Var
 		}
 		if (CmdType == CmdType.VAR)
 		{
-			if (value is int)
+			ValType = ValueType.INT;
+			IntValue = value;
+		}
+	}
+	public void SetFloat(float value)
+	{
+		if (CmdType == CmdType.GLOBAL_VAR)
+		{
+			Wa2EngineMain.Engine.GameFlags[IntValue] = (int)value;
+		}
+		if (CmdType == CmdType.LOCAL_VAR)
+		{
+			if (IntValue >= 26)
 			{
-				ValType = ValueType.INT;
-				IntValue = value;
+				Wa2EngineMain.Engine.Script.GloFloats[IntValue % 26] = value;
 			}
-			else if (value is float)
+			else
 			{
-				ValType = ValueType.FLOAT;
-				FloatValue = value;
+				Wa2EngineMain.Engine.Script.GloInts[IntValue] = (int)value;
 			}
 		}
-
+		if (CmdType == CmdType.VAR)
+		{
+			ValType = ValueType.FLOAT;
+			FloatValue = value;
+		}
 	}
-	public dynamic Get()
+	public void SetFrom(Wa2Var value)
+	{
+		if (value.CmdType == CmdType.STR_VAR)
+		{
+			return;
+		}
+		if (value.IsFloat)
+		{
+			SetFloat(value.GetFloat());
+		}
+		else
+		{
+			SetInt(value.GetInt());
+		}
+	}
+	public int GetInt()
+	{
+		if (ValType == ValueType.FLOAT)
+		{
+			return (int)FloatValue;
+		}
+		if (ValType == ValueType.INT)
+		{
+			return IntValue;
+		}
+		if (CmdType == CmdType.LOCAL_VAR)
+		{
+			if (IntValue >= 26)
+			{
+				return (int)Wa2EngineMain.Engine.Script.GloFloats[IntValue % 26];
+			}
+			return Wa2EngineMain.Engine.Script.GloInts[IntValue];
+		}
+		if (CmdType == CmdType.GLOBAL_VAR)
+		{
+			return Wa2EngineMain.Engine.GameFlags[IntValue];
+		}
+		return 0;
+	}
+	public float GetFloat()
 	{
 		if (ValType == ValueType.FLOAT)
 		{
@@ -93,12 +144,18 @@ public class Wa2Var
 		}
 		if (ValType == ValueType.INT)
 		{
-
 			return IntValue;
 		}
+		if (CmdType == CmdType.LOCAL_VAR && IntValue >= 26)
+		{
+			return Wa2EngineMain.Engine.Script.GloFloats[IntValue % 26];
+		}
+		return GetInt();
+	}
+	public string GetString()
+	{
 		if (CmdType == CmdType.STR_VAR)
 		{
-			// GD.Print(IntValue);
 			if (IntValue == 0)
 			{
 				return "春希";
@@ -112,24 +169,7 @@ public class Wa2Var
 				return "";
 			}
 		}
-		if (CmdType == CmdType.LOCAL_VAR)
-		{
-			if (IntValue >= 26)
-			{
-				return Wa2EngineMain.Engine.Script.GloFloats[IntValue % 26];
-			}
-			else
-			{
-				return Wa2EngineMain.Engine.Script.GloInts[IntValue];
-			}
-
-		}
-		if (CmdType == CmdType.GLOBAL_VAR)
-		{
-			return Wa2EngineMain.Engine.GameFlags[IntValue];
-		}
-
-		return 0;
+		return IsFloat ? GetFloat().ToString() : GetInt().ToString();
 	}
 }
 public class JumpEntry
@@ -188,7 +228,8 @@ public class Wa2Script
 		byte[] buffer = Wa2Resource.LoadFileBuffer(name + ".bnr");
 		if (buffer != null)
 		{
-			if (BitConverter.ToUInt32(buffer, 0) == 0x5243534c)
+			uint magic = buffer.Length >= 4 ? BitConverter.ToUInt32(buffer, 0) : 0;
+			if (magic == 0x5243534c)
 			{
 				uint pointCount = BitConverter.ToUInt32(buffer, 8);
 				for (int i = 0; i < pointCount; i++)
@@ -348,7 +389,7 @@ public class Wa2Script
 				break;
 			case 13:
 
-				JumpEntrys[^1].Flag = Args[^1].Get();
+				JumpEntrys[^1].Flag = Args[^1].GetInt();
 				uint pos1 = JumpEntrys[^1].PosArr[0];
 				uint pos2 = JumpEntrys[^1].Pos;
 				if (JumpEntrys[^1].Flag != 0)
@@ -373,7 +414,7 @@ public class Wa2Script
 				// 	break;
 				// }
 
-				JumpEntrys[^1].Flag = Args[^1].Get();
+				JumpEntrys[^1].Flag = Args[^1].GetInt();
 				if (JumpEntrys[^1].Flag == 0)
 				{
 					ScriptPos = JumpEntrys[^1].Pos;
@@ -385,7 +426,7 @@ public class Wa2Script
 				// Args.Clear();
 				break;
 			case 15:
-				JumpEntrys[^1].Flag = Args[^1].Get();
+				JumpEntrys[^1].Flag = Args[^1].GetInt();
 				if (JumpEntrys[^1].Flag != 0)
 				{
 					break;
@@ -397,7 +438,7 @@ public class Wa2Script
 
 				break;
 			case 16:
-				JumpEntrys[^1].Flag = Args[^1].Get();
+				JumpEntrys[^1].Flag = Args[^1].GetInt();
 				if (JumpEntrys[^1].Type != 7)
 				{
 					break;
@@ -550,166 +591,172 @@ public class Wa2Script
 		{
 			Args.RemoveAt(Args.Count - 1);
 		}
-		// GD.Print(a.Get());
-		// GD.Print(b.Get());
+		// GD.Print(a.GetInt());
+		// GD.Print(b.GetInt());
 		switch (v1)
 		{
 
 			case 0:
-				b.Set(a.Get());
+				b.SetFrom(a);
 				// if (b.CmdType == CmdType.GLOBAL_VAR)
 				// {
-				// 	_engine.GameSav.GameFlags[b.IntValue] = a.Get();
+				// 	_engine.GameSav.GameFlags[b.IntValue] = a.GetInt();
 				// }
 				// else if (b.CmdType == CmdType.LOCAL_VAR)
 				// {
-				// 	GD.Print("局部变量,索引:", b.IntValue, "值:", a.Get());
+				// 	GD.Print("局部变量,索引:", b.IntValue, "值:", a.GetInt());
 				// 	if (b.IntValue >= 26)
 				// 	{
-				// 		_engine.GameSav.GloFloats[b.IntValue % 26] = a.Get();
+				// 		_engine.GameSav.GloFloats[b.IntValue % 26] = a.GetInt();
 				// 	}
 				// 	else
 				// 	{
-				// 		_engine.GameSav.GloInts[b.IntValue] = a.Get();
+				// 		_engine.GameSav.GloInts[b.IntValue] = a.GetInt();
 				// 	}
 				// }
 				break;
 			case 1:
 				{
-					b.Set((int)(a.Get() + b.Get()));
+					b.SetInt(a.GetInt() + b.GetInt());
 				}
 				break;
 			case 2:
 				{
-					b.Set((int)(b.Get() - a.Get()));
+					b.SetInt(b.GetInt() - a.GetInt());
 					break;
 				}
 
 			case 3:
 				{
-					b.Set((int)(a.Get() * b.Get()));
+					b.SetInt(a.GetInt() * b.GetInt());
 					break;
 				}
 			case 4:
 				{
-					b.Set((int)(b.Get() / a.Get()));
+					b.SetInt(b.GetInt() / a.GetInt());
 					break;
 				}
 			case 5:
 				{
-					b.Set(b.Get() % a.Get());
+					b.SetInt(b.GetInt() % a.GetInt());
 					break;
 				}
 			case 6:
 				{
-					b.Set(b.Get() & a.Get());
+					b.SetInt(b.GetInt() & a.GetInt());
 					break;
 				}
 			case 7:
 				{
-					b.Set(b.Get() | a.Get());
+					b.SetInt(b.GetInt() | a.GetInt());
 					break;
 				}
 			case 8:
 				{
-					PushInt(5, 3, a.Get() == b.Get() ? 1 : 0);
+					bool equal = a.IsFloat || b.IsFloat
+						? a.GetFloat() == b.GetFloat()
+						: a.GetInt() == b.GetInt();
+					PushInt(5, 3, equal ? 1 : 0);
 				}
 				break;
 			case 9:
 				{
-					PushInt(5, 3, b.Get() < a.Get() ? 1 : 0);
+					PushInt(5, 3, b.GetFloat() < a.GetFloat() ? 1 : 0);
 				}
 				break;
 			case 0xa:
 				{
-					PushInt(5, 3, b.Get() > a.Get() ? 1 : 0);
+					PushInt(5, 3, b.GetFloat() > a.GetFloat() ? 1 : 0);
 				}
 				break;
 			case 0xb:
 				{
 
-					PushInt(5, 3, b.Get() <= a.Get() ? 1 : 0);
+					PushInt(5, 3, b.GetFloat() <= a.GetFloat() ? 1 : 0);
 				}
 				break;
 			case 0xc:
 				{
-					PushInt(5, 3, b.Get() >= a.Get() ? 1 : 0);
+					PushInt(5, 3, b.GetFloat() >= a.GetFloat() ? 1 : 0);
 				}
 				break;
 			case 0xd:
 				{
-					PushInt(5, 3, (b.Get() == 0 || a.Get() == 0) ? 0 : 1);
+					PushInt(5, 3, (b.GetInt() == 0 || a.GetInt() == 0) ? 0 : 1);
 				}
 				break;
 			case 0xe:
 				{
-					PushInt(5, 3, b.Get() != 0 || a.Get() != 0 ? 1 : 0);
+					PushInt(5, 3, b.GetInt() != 0 || a.GetInt() != 0 ? 1 : 0);
 				}
 				break;
 			case 0xf:
 				{
-					PushInt(5, 3, b.Get() != a.Get() ? 1 : 0);
+					bool notEqual = a.IsFloat || b.IsFloat
+						? a.GetFloat() != b.GetFloat()
+						: a.GetInt() != b.GetInt();
+					PushInt(5, 3, notEqual ? 1 : 0);
 				}
 				break;
 			case 0x10:
 				{
-					if (a.Get() is int && b.Get() is int)
+					if (!a.IsFloat && !b.IsFloat)
 					{
-						PushInt(5, 3, a.Get() + b.Get());
+						PushInt(5, 3, a.GetInt() + b.GetInt());
 					}
 					else
 					{
-						PushFloat(5, 4, a.Get() + b.Get());
+						PushFloat(5, 4, a.GetFloat() + b.GetFloat());
 					}
 					break;
 				}
 			case 0x11:
 				{
-					if (a.Get() is int && b.Get() is int)
+					if (!a.IsFloat && !b.IsFloat)
 					{
-						PushInt(5, 3, b.Get() - a.Get());
+						PushInt(5, 3, b.GetInt() - a.GetInt());
 					}
 					else
 					{
-						PushFloat(5, 4, b.Get() - a.Get());
+						PushFloat(5, 4, b.GetFloat() - a.GetFloat());
 					}
 					break;
 				}
 			case 0x12:
 				{
-					if (a.Get() is int && b.Get() is int)
+					if (!a.IsFloat && !b.IsFloat)
 					{
-						PushInt(5, 3, b.Get() * a.Get());
+						PushInt(5, 3, b.GetInt() * a.GetInt());
 					}
 					else
 					{
-						PushFloat(5, 4, b.Get() * a.Get());
+						PushFloat(5, 4, b.GetFloat() * a.GetFloat());
 					}
 					break;
 				}
 			case 0x13:
 				{
-					if (a.Get() is int && b.Get() is int)
+					if (!a.IsFloat && !b.IsFloat)
 					{
-						PushInt(5, 3, b.Get() / a.Get());
+						PushInt(5, 3, b.GetInt() / a.GetInt());
 					}
 					else
 					{
-						PushFloat(5, 4, b.Get() / a.Get());
+						PushFloat(5, 4, b.GetFloat() / a.GetFloat());
 					}
 					break;
 				}
 			case 0x14:
 				{
 
-					PushInt(5, 3, b.Get() % a.Get());
+					PushInt(5, 3, b.GetInt() % a.GetInt());
 					break;
 				}
 			case 0x15:
 				{
-					if (a.Get() is int && b.Get() is int)
+					if (!a.IsFloat && !b.IsFloat)
 					{
-						PushInt(5, 3, b.Get() & a.Get());
+						PushInt(5, 3, b.GetInt() & a.GetInt());
 					}
 					else
 					{
@@ -725,25 +772,46 @@ public class Wa2Script
 				}
 			case 0x16:
 				{
-					PushInt(5, 3, b.Get() | a.Get());
+					PushInt(5, 3, b.GetInt() | a.GetInt());
 					break;
 				}
 			case 0x17:
-				a.Set(a.Get() * -1);
+				if (a.IsFloat)
+				{
+					a.SetFloat(-a.GetFloat());
+				}
+				else
+				{
+					a.SetInt(-a.GetInt());
+				}
 				break;
 			case 0x18:
-				a.Set(a.Get() == 0 ? 1 : 0);
+				a.SetInt(a.GetFloat() == 0 ? 1 : 0);
 				break;
 			case 0x19:
-				a.Set(a.Get() + 1);
-				// GD.Print(a.Get());
+				if (a.IsFloat)
+				{
+					a.SetFloat(a.GetFloat() + 1);
+				}
+				else
+				{
+					a.SetInt(a.GetInt() + 1);
+				}
+				// GD.Print(a.GetInt());
 				break;
 			case 0x1A:
-				a.Set(a.Get() - 1);
+				if (a.IsFloat)
+				{
+					a.SetFloat(a.GetFloat() - 1);
+				}
+				else
+				{
+					a.SetInt(a.GetInt() - 1);
+				}
 				break;
 			case 0x1B:
 				{
-					b.ValType = (ValueType)a.Get();
+					b.ValType = (ValueType)a.GetInt();
 					// if (a.GetType() == typeof(int))
 					// {
 					// 	Args.Add((int)b);

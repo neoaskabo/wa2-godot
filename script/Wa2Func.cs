@@ -169,13 +169,13 @@ public class Wa2Func
 	}
 	public bool SetMessage(List<Wa2Var> args)
 	{
-		SetMessageEx(args[0].Get(), args[1].Get(), args[2].Get(), 1);
+		SetMessageEx(args[0].GetString(), args[1].GetInt(), args[2].GetInt(), 1);
 		return false;
 
 	}
 	public bool SetMessageE(List<Wa2Var> args)
 	{
-		SetMessageEx(args[0].Get(), args[1].Get(), args[2].Get(), 2);
+		SetMessageEx(args[0].GetString(), args[1].GetInt(), args[2].GetInt(), 2);
 		return false;
 	}
 	public void SetMessageEx(string text, int idx, int v3, int v4)
@@ -229,7 +229,7 @@ public class Wa2Func
 	}
 	public bool SetMessage2(List<Wa2Var> args)
 	{
-		SetMessageEx(args[0].Get(), args[1].Get(), args[2].Get(), 2);
+		SetMessageEx(args[0].GetString(), args[1].GetInt(), args[2].GetInt(), 2);
 		_engine.SkipDisable = true;
 		return false;
 	}
@@ -246,7 +246,7 @@ public class Wa2Func
 	}
 	public bool SetDemoMode(List<Wa2Var> args)
 	{
-		_engine.DemoMode = args[0].Get() > 0;
+		_engine.DemoMode = args[0].GetInt() > 0;
 		_engine.AdvMain.SetDemoMode(_engine.DemoMode);
 		if (_engine.DemoMode)
 		{
@@ -256,16 +256,17 @@ public class Wa2Func
 	}
 	public bool VI(List<Wa2Var> args)
 	{
-		// if (args[0].Get() == 0)
+		// if (args[0].GetInt() == 0)
 		// {
 		//参数1大概率是废弃了
-		// if (!(args[0].Get() is int))
+		// if (!(args[0].GetInt() is int))
 		// {
 		// 	GD.Print("vi");
 		// }
-		if (args[1].Get() != -1)
+		int label = args[1].GetInt();
+		if (label != -1)
 		{
-			_engine.Label = args[1].Get();
+			_engine.Label = label;
 		}
 		return true;
 		// }
@@ -278,9 +279,9 @@ public class Wa2Func
 	{
 		//2循环
 		//3通道？
-		// GD.Print("vv轨道", args[3].Get());
+		// GD.Print("vv轨道", args[3].GetInt());
 
-		_engine.SoundMgr.PlayVoice(_engine.Label, args[4].Get(), args[0].Get(), args[1].Get(), args[2].Get() == 1, args[3].Get());
+		_engine.SoundMgr.PlayVoice(_engine.Label, args[4].GetInt(), args[0].GetInt(), args[1].GetInt(), args[2].GetInt() == 1, args[3].GetInt());
 
 		return true;
 	}
@@ -289,14 +290,14 @@ public class Wa2Func
 		//5通道？
 		//2标签
 		//4循环
-		// GD.Print("轨道:", args[5].Get());
+		// GD.Print("轨道:", args[5].GetInt());
 
-		_engine.SoundMgr.PlayVoice(args[2].Get(), args[1].Get(), args[0].Get(), args[3].Get(), args[4].Get() == 1, args[5].Get());
+		_engine.SoundMgr.PlayVoice(args[2].GetInt(), args[1].GetInt(), args[0].GetInt(), args[3].GetInt(), args[4].GetInt() == 1, args[5].GetInt());
 		return true;
 	}
 	public bool VW(List<Wa2Var> args)
 	{
-		_engine.WaitTimer.Start(_engine.SoundMgr.GetVoiceTime(), Wa2WaitTimer.WaitType.WAIT_VOICE, args[1].Get());
+		_engine.WaitTimer.Start(_engine.SoundMgr.GetVoiceTime(), Wa2WaitTimer.WaitType.WAIT_VOICE, args[1].GetInt());
 		args.Clear();
 		// _engine.WaitClick = true;
 		//1音轨
@@ -307,8 +308,8 @@ public class Wa2Func
 	{
 		//0时间
 		//1音轨
-		// GD.Print("停止音轨", args[1].Get());
-		_engine.SoundMgr.StopVoice(args[1].Get(), args[0].Get() * _engine.FrameTime);
+		// GD.Print("停止音轨", args[1].GetInt());
+		_engine.SoundMgr.StopVoice(args[1].GetInt(), args[0].GetFloat() * _engine.FrameTime);
 		return true;
 	}
 	public bool W(List<Wa2Var> args)
@@ -324,7 +325,7 @@ public class Wa2Func
 	{
 		if (args[0].CmdType == CmdType.STR_VAR)
 		{
-			_engine.AdvMain.NameLabel.Text = args[0].Get();
+			_engine.AdvMain.NameLabel.Text = args[0].GetString();
 		}
 		else
 		{
@@ -343,18 +344,18 @@ public class Wa2Func
 		// _engine.AnimatorMgr.FinishAll(true);
 		// Texture2D NextTexture;
 		// Texture2D CeacheTexture = ImageTexture.CreateFromImage(_engine.Viewport.GetTexture().GetImage());
-		// if (args[1].Get() >= 0)
+		// if (args[1].GetInt() >= 0)
 		// {
-		// 	_engine.BgInfo.Path = string.Format("B{0:D4}{1:D1}{2:D1}.tga", args[1].Get(), args[2].Get(), _engine.TimeMode);
+		// 	_engine.BgInfo.Path = string.Format("B{0:D4}{1:D1}{2:D1}.tga", args[1].GetInt(), args[2].GetInt(), _engine.TimeMode);
 		// 	NextTexture = Wa2Resource.GetTgaImage(_engine.BgInfo.Path);
 		// }
 		// else
 		// {
 		// 	NextTexture = _engine.BgTexture.GetCurTexture();
 		// }
-		// if (args[0].Get() >= 128)
+		// if (args[0].GetInt() >= 128)
 		// {
-		// 	_engine.MaskTexture.SetMaskTexture(Wa2Resource.GetMaskImage(args[0].Get() & 0x7f));
+		// 	_engine.MaskTexture.SetMaskTexture(Wa2Resource.GetMaskImage(args[0].GetInt() & 0x7f));
 		// }
 		// else
 		// {
@@ -364,9 +365,9 @@ public class Wa2Func
 		// _engine.BgTexture.SetCurScale(new Vector2(1, 1));
 		// _engine.BgInfo.Scale = Vector2.One;
 		// _engine.BgInfo.Offset = Vector2.Zero;
-		// _engine.ClearChar(args[3].Get() * _engine.FrameTime);
+		// _engine.ClearChar(args[3].GetInt() * _engine.FrameTime);
 		// _engine.BgTexture.SetCurTexture(NextTexture);
-		// if (args[3].Get() == 0)
+		// if (args[3].GetInt() == 0)
 		// {
 		// 	return true;
 		// }
@@ -376,22 +377,22 @@ public class Wa2Func
 		// _engine.MaskTexture.SetNextScale(new Vector2(1, 1));
 		// _engine.MaskTexture.SetNextOffset(new Vector2(0, 0));
 		// _engine.MaskTexture.SetNextTexture(NextTexture);
-		// _engine.AnimatorMgr.AddMaskFeadAnimation(_engine.MaskTexture, args[3].Get() * _engine.FrameTime);
-		int id = args[2].Get() + 10 * args[1].Get();
-		_engine.RenderImage(id, args[0].Get(), false, 0, args[3].Get(), args[4].Get(), args[5].Get(), args[6].Get(), args[7].Get() / 1280f, args[8].Get() / 720f);
+		// _engine.AnimatorMgr.AddMaskFeadAnimation(_engine.MaskTexture, args[3].GetInt() * _engine.FrameTime);
+		int id = args[2].GetInt() + 10 * args[1].GetInt();
+		_engine.RenderImage(id, args[0].GetInt(), false, 0, args[3].GetInt(), args[4].GetInt(), args[5].GetInt(), args[6].GetInt(), args[7].GetFloat() / 1280f, args[8].GetFloat() / 720f);
 		return false;
 	}
 	public bool BC(List<Wa2Var> args)
 	{
-		int id = args[2].Get() + 10 * args[1].Get();
-		_engine.RenderImage(id, args[0].Get(), true, 0, args[3].Get(), args[4].Get(), args[5].Get(), args[6].Get(), args[7].Get() / 1280f, args[8].Get() / 720f);
+		int id = args[2].GetInt() + 10 * args[1].GetInt();
+		_engine.RenderImage(id, args[0].GetInt(), true, 0, args[3].GetInt(), args[4].GetInt(), args[5].GetInt(), args[6].GetInt(), args[7].GetFloat() / 1280f, args[8].GetFloat() / 720f);
 		return false;
 		// _engine.AnimatorMgr.FinishAll(true);
 		// Texture2D NextTexture;
 		// Texture2D CeacheTexture = _engine.BgTexture.GetCurTexture();
-		// if (args[1].Get() >= 0)
+		// if (args[1].GetInt() >= 0)
 		// {
-		// 	_engine.BgInfo.Path = string.Format("B{0:D4}{1:D1}{2:D1}.tga", args[1].Get(), args[2].Get(), _engine.TimeMode);
+		// 	_engine.BgInfo.Path = string.Format("B{0:D4}{1:D1}{2:D1}.tga", args[1].GetInt(), args[2].GetInt(), _engine.TimeMode);
 		// 	NextTexture = Wa2Resource.GetTgaImage(_engine.BgInfo.Path);
 		// }
 		// else
@@ -403,8 +404,8 @@ public class Wa2Func
 		// _engine.BgTexture.SetMaskTexture(null);
 		// // Wa2ImageAnimator animator3 = new(_engine.BgTexture);
 		// // animator3.InitFade(_engine.BgInfo.Frame * _engine.FrameTime);
-		// _engine.AnimatorMgr.AddMaskFeadAnimation(_engine.BgTexture, args[3].Get() * _engine.FrameTime, false);
-		// _engine.UpdateChar(args[3].Get() * _engine.FrameTime);
+		// _engine.AnimatorMgr.AddMaskFeadAnimation(_engine.BgTexture, args[3].GetInt() * _engine.FrameTime, false);
+		// _engine.UpdateChar(args[3].GetInt() * _engine.FrameTime);
 
 		// GD.Print("更新背景和角色");
 
@@ -413,10 +414,10 @@ public class Wa2Func
 	{
 		// Texture2D NextTexture;
 		// _engine.AnimatorMgr.FinishAll(true);
-		// if (args[1].Get() >= 0)
+		// if (args[1].GetInt() >= 0)
 		// {
-		// 	_engine.BgInfo.Path = string.Format("v{0:D5}{1:D1}.tga", args[1].Get(), args[2].Get());
-		// 	_engine.SetCgFlag(args[1].Get() * 10 + args[2].Get(), 1);
+		// 	_engine.BgInfo.Path = string.Format("v{0:D5}{1:D1}.tga", args[1].GetInt(), args[2].GetInt());
+		// 	_engine.SetCgFlag(args[1].GetInt() * 10 + args[2].GetInt(), 1);
 		// 	NextTexture = Wa2Resource.GetTgaImage(_engine.BgInfo.Path);
 		// }
 		// else
@@ -428,12 +429,12 @@ public class Wa2Func
 		// _engine.MaskTexture.SetCurTexture(ImageTexture.CreateFromImage(_engine.Viewport.GetTexture().GetImage()));
 		// _engine.MaskTexture.SetNextTexture(NextTexture);
 		// _engine.MaskTexture.SetMaskTexture(null);
-		// _engine.AnimatorMgr.AddMaskFeadAnimation(_engine.MaskTexture, args[3].Get() * _engine.FrameTime);
-		// _engine.ClearChar(args[3].Get() * _engine.FrameTime);
+		// _engine.AnimatorMgr.AddMaskFeadAnimation(_engine.MaskTexture, args[3].GetInt() * _engine.FrameTime);
+		// _engine.ClearChar(args[3].GetInt() * _engine.FrameTime);
 		// _engine.BgTexture.SetCurTexture(NextTexture);
 		// return false;
-		int id = args[2].Get() + 10 * args[1].Get();
-		_engine.RenderImage(id, args[0].Get(), false, 1, args[3].Get(), args[4].Get(), args[5].Get(), args[6].Get(), args[7].Get() / 1280f, args[8].Get() / 720f);
+		int id = args[2].GetInt() + 10 * args[1].GetInt();
+		_engine.RenderImage(id, args[0].GetInt(), false, 1, args[3].GetInt(), args[4].GetInt(), args[5].GetInt(), args[6].GetInt(), args[7].GetFloat() / 1280f, args[8].GetFloat() / 720f);
 		return false;
 	}
 	public bool H(List<Wa2Var> args)
@@ -444,7 +445,7 @@ public class Wa2Func
 	{
 		if (!_engine.CanSkip())
 		{
-			_engine.AnimatorMgr.AddShakeAnimation(args[0].Get(), args[1].Get(), args[2].Get());
+			_engine.AnimatorMgr.AddShakeAnimation(args[0].GetInt(), args[1].GetInt(), args[2].GetInt());
 		}
 		return false;
 	}
@@ -454,12 +455,12 @@ public class Wa2Func
 	}
 	public bool F(List<Wa2Var> args)
 	{
-		float r = (int)args[2].Get() / 255f;
-		float g = (int)args[3].Get() / 255f;
-		float b = (int)args[4].Get() / 255f;
-		if (args[1].Get() > 0)
+		float r = (int)args[2].GetInt() / 255f;
+		float g = (int)args[3].GetInt() / 255f;
+		float b = (int)args[4].GetInt() / 255f;
+		if (args[1].GetInt() > 0)
 		{
-			_engine.AnimatorMgr.AddFAnimation(new Color(r, g, b), args[1].Get() * _engine.FrameTime);
+			_engine.AnimatorMgr.AddFAnimation(new Color(r, g, b), args[1].GetFloat() * _engine.FrameTime);
 		}
 		else
 		{
@@ -469,13 +470,13 @@ public class Wa2Func
 	}
 	public bool FB(List<Wa2Var> args)
 	{
-		float r = (int)args[1].Get() / 255f;
-		float g = (int)args[2].Get() / 255f;
-		float b = (int)args[3].Get() / 255f;
+		float r = (int)args[1].GetInt() / 255f;
+		float g = (int)args[2].GetInt() / 255f;
+		float b = (int)args[3].GetInt() / 255f;
 
-		if (args[0].Get() > 0)
+		if (args[0].GetInt() > 0)
 		{
-			_engine.AnimatorMgr.AddFBAnimation(new Color(r, g, b), args[0].Get() * _engine.FrameTime);
+			_engine.AnimatorMgr.AddFBAnimation(new Color(r, g, b), args[0].GetFloat() * _engine.FrameTime);
 		}
 		else
 		{
@@ -489,13 +490,13 @@ public class Wa2Func
 
 		_engine.AddChar(new CharItem
 		{
-			id = args[0].Get(),
-			no = args[1].Get(),
-			pos = args[2].Get(),
+			id = args[0].GetInt(),
+			no = args[1].GetInt(),
+			pos = args[2].GetInt(),
 		});
 		//v7色调
 		//v6透明度
-		_engine.UpdateChar(args[5].Get() * _engine.FrameTime);
+		_engine.UpdateChar(args[5].GetFloat() * _engine.FrameTime);
 		return false;
 
 	}
@@ -503,21 +504,21 @@ public class Wa2Func
 	{
 		_engine.AddChar(new CharItem
 		{
-			id = args[0].Get(),
-			no = args[1].Get(),
-			pos = args[2].Get(),
+			id = args[0].GetInt(),
+			no = args[1].GetInt(),
+			pos = args[2].GetInt(),
 		});
 		return true;
 	}
 	public bool CR(List<Wa2Var> args)
 	{
-		_engine.RemoveChar(args[0].Get());
-		_engine.UpdateChar(args[2].Get() * _engine.FrameTime);
+		_engine.RemoveChar(args[0].GetInt());
+		_engine.UpdateChar(args[2].GetFloat() * _engine.FrameTime);
 		return false;
 	}
 	public bool CRW(List<Wa2Var> args)
 	{
-		_engine.RemoveChar(args[0].Get());
+		_engine.RemoveChar(args[0].GetInt());
 		return true;
 	}
 	public bool M(List<Wa2Var> args)
@@ -526,18 +527,19 @@ public class Wa2Func
 		{
 			GD.Print("错误位置", _engine.Script.ScriptPos);
 		}
-		_engine.BgmInfo.Id = args[0].Get();
-		_engine.BgmInfo.Loop = args[2].Get();
-		_engine.BgmInfo.Volume = args[3].Get();
+		_engine.BgmInfo.Id = args[0].GetInt();
+		_engine.BgmInfo.Loop = args[2].GetInt();
+		_engine.BgmInfo.Volume = args[3].GetInt();
 		// GD.Print("播放bgm");
-		// GD.Print( args[1].Get());
-		_engine.SoundMgr.PlayBgm(args[0].Get(), args[2].Get() != 0, args[3].Get());
+		// GD.Print( args[1].GetInt());
+		_engine.SoundMgr.PlayBgm(args[0].GetInt(), args[2].GetInt() != 0, args[3].GetInt());
 		return true;
 	}
 	public bool MS(List<Wa2Var> args)
 	{
 		// GD.Print("暂停:", args[0] * _engine.FrameTime);
-		_engine.SoundMgr.StopBgm(args[0].Get() * _engine.FrameTime);
+		float frame = args[0].GetFloat();
+		_engine.SoundMgr.StopBgm(frame * _engine.FrameTime);
 		return true;
 		// uint v0 = args[0];
 	}
@@ -567,7 +569,7 @@ public class Wa2Func
 		{
 			if (Wa2SoundMgr.Instance.SeAudios[i].Stream == null)
 			{
-				Wa2SoundMgr.Instance.PlaySe(i, args[0].Get(), false, 0, args[1].Get());
+				Wa2SoundMgr.Instance.PlaySe(i, args[0].GetInt(), false, 0, args[1].GetInt());
 				break;
 			}
 		}
@@ -577,32 +579,32 @@ public class Wa2Func
 	public bool SEP(List<Wa2Var> args)
 	{
 		// GD.Print(args.Count);
-		// GD.Print("循环播放:", args[3].Get());
-		// GD.Print("id:", args[1].Get());
-		GD.Print("SEP:",args[5].Get());
-		Wa2SoundMgr.Instance.PlaySe(args[0].Get(), args[1].Get(), args[3].Get() != 0, args[2].Get() * _engine.FrameTime, args[4].Get());
+		// GD.Print("循环播放:", args[3].GetInt());
+		// GD.Print("id:", args[1].GetInt());
+		GD.Print("SEP:", args[5].GetInt());
+		Wa2SoundMgr.Instance.PlaySe(args[0].GetInt(), args[1].GetInt(), args[3].GetInt() != 0, args[2].GetFloat() * _engine.FrameTime, args[4].GetInt());
 		args.Clear();
 		return true;
 	}
 	public bool SES(List<Wa2Var> args)
 	{
-		if (args[0].Get() > 10)
+		if (args[0].GetInt() > 10)
 		{
 			GD.Print("错误");
 		}
-		Wa2SoundMgr.Instance.StopSe(args[0].Get(), args[1].Get() * _engine.FrameTime);
+		Wa2SoundMgr.Instance.StopSe(args[0].GetInt(), args[1].GetFloat() * _engine.FrameTime);
 		args.Clear();
 		return true;
 	}
 	public bool SEV(List<Wa2Var> args)
 	{
-		_engine.SoundMgr.SetSeVolume(args[0].Get(), args[1].Get(), args[2].Get() * _engine.FrameTime);
+		_engine.SoundMgr.SetSeVolume(args[0].GetInt(), args[1].GetInt(), args[2].GetFloat() * _engine.FrameTime);
 		args.Clear();
 		return true;
 	}
 	public bool SEW(List<Wa2Var> args)
 	{
-		_engine.WaitTimer.Start(_engine.SoundMgr.GetSeTime(args[0].Get()), Wa2WaitTimer.WaitType.WAIT_SE, args[0].Get());
+		_engine.WaitTimer.Start(_engine.SoundMgr.GetSeTime(args[0].GetInt()), Wa2WaitTimer.WaitType.WAIT_SE, args[0].GetInt());
 		args.Clear();
 		return false;
 	}
@@ -613,8 +615,8 @@ public class Wa2Func
 	}
 	public bool SetTimeMode(List<Wa2Var> args)
 	{
-		_engine.TimeMode = args[0].Get();
-		GD.Print("mode", args[0].Get());
+		_engine.TimeMode = args[0].GetInt();
+		GD.Print("mode", args[0].GetInt());
 		return true;
 		// uint v0 = args[0];
 	}
@@ -625,12 +627,12 @@ public class Wa2Func
 	}
 	public bool SetEffctMode(List<Wa2Var> args)
 	{
-		_engine.EffectMode = args[0].Get();
+		_engine.EffectMode = args[0].GetString();
 		return true;
 	}
 	public bool SetWeather(List<Wa2Var> args)
 	{
-		_engine.SetWeather(args[0].Get(), args[1].Get(), args[2].Get(), 0, args[3].Get(), args[4].Get(), args[5].Get());
+		_engine.SetWeather(args[0].GetInt(), args[1].GetInt(), args[2].GetInt(), 0, args[3].GetInt(), args[4].GetInt(), args[5].GetInt());
 		return true;
 	}
 	public bool ChangeWeather(List<Wa2Var> args)
@@ -639,25 +641,25 @@ public class Wa2Func
 		{
 			return true;
 		}
-		if (args[0].Get() != -1000)
+		if (args[0].GetInt() != -1000)
 		{
-			_engine.SetWeatherSpeedX(args[0].Get());
+			_engine.SetWeatherSpeedX(args[0].GetInt());
 		}
-		if (args[1].Get() != -1000)
+		if (args[1].GetInt() != -1000)
 		{
-			_engine.SetWeatherSpeedY(args[1].Get());
+			_engine.SetWeatherSpeedY(args[1].GetInt());
 		}
-		if (args[2].Get() != -1000)
+		if (args[2].GetInt() != -1000)
 		{
-			_engine.SetWeatherCount(args[2].Get());
+			_engine.SetWeatherCount(args[2].GetInt());
 		}
-		if (args[3].Get() != -1000)
+		if (args[3].GetInt() != -1000)
 		{
 
 		}
-		if (args[4].Get() != -1000)
+		if (args[4].GetInt() != -1000)
 		{
-			_engine.SetWeatherIndex(args[4].Get());
+			_engine.SetWeatherIndex(args[4].GetInt());
 		}
 		return true;
 	}
@@ -669,37 +671,38 @@ public class Wa2Func
 	public bool LoadBmp(List<Wa2Var> args)
 	{
 		Wa2Sprite texture = new();
+		string path = args[1].GetString();
 		// // AtlasTexture a=new();
 		// a.Atlas= 
-		texture.Path = args[1].Get();
-		if ((args[1].Get() as string).EndsWith(".tga"))
+		texture.Path = path;
+		if (path.EndsWith(".tga"))
 		{
-			texture.Texture = Wa2Resource.LoadTgaImage(args[1].Get());
+			texture.Texture = Wa2Resource.LoadTgaImage(path);
 		}
 		else
 		{
-			texture.Texture = Wa2Resource.LoadBmpImage(args[1].Get());
+			texture.Texture = Wa2Resource.LoadBmpImage(path);
 		}
-		texture.ZIndex = args[2].Get();
-		_engine.BmpDict[args[0].Get()] = texture;
+		texture.ZIndex = args[2].GetInt();
+		_engine.BmpDict[args[0].GetInt()] = texture;
 		_engine.BmpContainer.CallDeferred("add_child", texture);
 		// for (int i = 0; i < args.Count; i++)
 		// {
-		// 	GD.Print("loadbmp" + i + ":", args[i].Get());
+		// 	GD.Print("loadbmp" + i + ":", args[i].GetInt());
 		// }
 		return true;
 	}
 	public bool LoadBmpAnime(List<Wa2Var> args)
 	{
-		BmpAnime bmpAnime = new BmpAnime(args[1].Get());
+		BmpAnime bmpAnime = new BmpAnime(args[1].GetString());
 
-		bmpAnime.ZIndex = args[2].Get();
-		_engine.BmpDict[args[0].Get()] = bmpAnime;
+		bmpAnime.ZIndex = args[2].GetInt();
+		_engine.BmpDict[args[0].GetInt()] = bmpAnime;
 		bmpAnime.SetFrameInfo(0);
 		_engine.BmpContainer.CallDeferred("add_child", bmpAnime);
 		// for (int i = 0; i < args.Count; i++)
 		// {
-		// 	GD.Print("bmpani" + i + ":", args[i].Get());
+		// 	GD.Print("bmpani" + i + ":", args[i].GetInt());
 		// }
 		// GD.Print("加载bmp动画");
 		return true;
@@ -714,18 +717,18 @@ public class Wa2Func
 	}
 	public bool ReleaseBmp(List<Wa2Var> args)
 	{
-		if (_engine.BmpDict.ContainsKey(args[0].Get()))
+		if (_engine.BmpDict.ContainsKey(args[0].GetInt()))
 		{
-			_engine.BmpDict[args[0].Get()].Hide();
-			_engine.BmpDict[args[0].Get()].QueueFree();
-			_engine.BmpDict.Remove(args[0].Get());
+			_engine.BmpDict[args[0].GetInt()].Hide();
+			_engine.BmpDict[args[0].GetInt()].QueueFree();
+			_engine.BmpDict.Remove(args[0].GetInt());
 		}
 
 		return true;
 	}
 	public bool WaitBmpAnime(List<Wa2Var> args)
 	{
-		if (!_engine.BmpDict.ContainsKey(args[0].Get()))
+		if (!_engine.BmpDict.ContainsKey(args[0].GetInt()))
 		{
 			return false;
 		}
@@ -733,7 +736,7 @@ public class Wa2Func
 	}
 	public bool SetBmpAnimePlay(List<Wa2Var> args)
 	{
-		if (!_engine.BmpDict.ContainsKey(args[0].Get()))
+		if (!_engine.BmpDict.ContainsKey(args[0].GetInt()))
 		{
 
 		}
@@ -741,7 +744,7 @@ public class Wa2Func
 	}
 	public bool SetBmpDisp(List<Wa2Var> args)
 	{
-		if (!_engine.BmpDict.ContainsKey(args[0].Get()))
+		if (!_engine.BmpDict.ContainsKey(args[0].GetInt()))
 		{
 
 		}
@@ -749,7 +752,7 @@ public class Wa2Func
 	}
 	public bool SetBmpLayer(List<Wa2Var> args)
 	{
-		if (!_engine.BmpDict.ContainsKey(args[0].Get()))
+		if (!_engine.BmpDict.ContainsKey(args[0].GetInt()))
 		{
 
 		}
@@ -758,30 +761,29 @@ public class Wa2Func
 	}
 	public bool SetBmpParam(List<Wa2Var> args)
 	{
-		if (!_engine.BmpDict.ContainsKey(args[0].Get()))
+		if (!_engine.BmpDict.ContainsKey(args[0].GetInt()))
 		{
 			return true;
 		}
-		Wa2Sprite tex = _engine.BmpDict[args[0].Get()];
-		int mode = args[1].Get();
+		Wa2Sprite tex = _engine.BmpDict[args[0].GetInt()];
+		int mode = args[1].GetInt();
 		tex.SetMode(mode);
 
-		float d = args[3].Get() * _engine.FrameTime;
-		if (args[3].Get() > 0)
+		float d = args[3].GetFloat() * _engine.FrameTime;
+		if (args[3].GetInt() > 0)
 		{
-			_engine.AnimatorMgr.AddFeadAnimation(tex, d, args[2].Get() / 255f);
+			_engine.AnimatorMgr.AddFeadAnimation(tex, d, args[2].GetFloat() / 255f);
 		}
 		else
 		{
 			if (tex is BmpAnime)
 			{
-				(_engine.BmpDict[args[0].Get()] as Sprite2D).Modulate = new Color(1, 1, 1, Math.Min(args[2].Get() + 17, 255) / 255f);
+				(_engine.BmpDict[args[0].GetInt()] as Sprite2D).Modulate = new Color(1, 1, 1, Math.Min(args[2].GetInt() + 17, 255) / 255f);
 			}
 			else
 			{
-				(_engine.BmpDict[args[0].Get()] as Sprite2D).Modulate = new Color(1, 1, 1, Math.Min(args[2].Get(), 255) / 255f);
+				(_engine.BmpDict[args[0].GetInt()] as Sprite2D).Modulate = new Color(1, 1, 1, Math.Min(args[2].GetInt(), 255) / 255f);
 			}
-
 		}
 		return true;
 	}
@@ -795,12 +797,12 @@ public class Wa2Func
 	}
 	public bool SetBmpMove(List<Wa2Var> args)
 	{
-		if (!_engine.BmpDict.ContainsKey(args[0].Get()))
+		if (!_engine.BmpDict.ContainsKey(args[0].GetInt()))
 		{
 			return true;
 		}
-		Sprite2D tex = _engine.BmpDict[args[0].Get()];
-		tex.Position = new Vector2(args[1].Get(), args[2].Get());
+		Sprite2D tex = _engine.BmpDict[args[0].GetInt()];
+		tex.Position = new Vector2(args[1].GetFloat(), args[2].GetFloat());
 		return true;
 
 		// GD.Print(tex.Position);
@@ -811,30 +813,30 @@ public class Wa2Func
 	}
 	public bool SetBmpZoom(List<Wa2Var> args)
 	{
-		if (!_engine.BmpDict.ContainsKey(args[0].Get()))
+		if (!_engine.BmpDict.ContainsKey(args[0].GetInt()))
 		{
 			return true;
 		}
-		Sprite2D tex = _engine.BmpDict[args[0].Get()];
+		Sprite2D tex = _engine.BmpDict[args[0].GetInt()];
 		tex.Centered = false;
-		tex.Scale = new Vector2(args[3].Get() / tex.Texture.GetSize().X, args[4].Get() / tex.Texture.GetSize().Y);
-		tex.Position = new Vector2(args[1].Get(), args[2].Get());
+		tex.Scale = new Vector2(args[3].GetFloat() / tex.Texture.GetSize().X, args[4].GetFloat() / tex.Texture.GetSize().Y);
+		tex.Position = new Vector2(args[1].GetFloat(), args[2].GetFloat());
 		return true;
 	}
 	public bool SetBmpZoom2(List<Wa2Var> args)
 	{
-		if (!_engine.BmpDict.ContainsKey(args[0].Get()))
+		if (!_engine.BmpDict.ContainsKey(args[0].GetInt()))
 		{
 			return true;
 		}
-		Sprite2D tex = _engine.BmpDict[args[0].Get()];
-		Vector2 texSize = tex.Texture.GetSize() * args[3].Get();
+		Sprite2D tex = _engine.BmpDict[args[0].GetInt()];
+		Vector2 texSize = tex.Texture.GetSize() * args[3].GetFloat();
 		tex.Centered = false;
-		tex.Offset = -new Vector2(args[1].Get(), args[2].Get()) / texSize * tex.Texture.GetSize();
+		tex.Offset = -new Vector2(args[1].GetFloat(), args[2].GetFloat()) / texSize * tex.Texture.GetSize();
 		// tex.Offset=-(texSize-new Vector2(1280,720))/texSize*0.5f*tex.Texture.GetSize();
-		// Vector2 zoomCenter=new Vector2( args[1].Get()*2/texSize.X, args[2].Get()*2/texSize.Y);
+		// Vector2 zoomCenter=new Vector2( args[1].GetFloat()*2/texSize.X, args[2].GetFloat()*2/texSize.Y);
 		// tex.Offset =-zoomCenter*tex.Texture.GetSize()*0.5f;
-		tex.Scale = new Vector2(args[3].Get(), args[3].Get());
+		tex.Scale = new Vector2(args[3].GetFloat(), args[3].GetFloat());
 		return true;
 	}
 	public bool SetBmpRoll(List<Wa2Var> args)
@@ -845,22 +847,22 @@ public class Wa2Func
 	{
 		_engine.StopSkip();
 		_engine.SoundMgr.StopAll();
-		if (_engine.ReadSysFlag(args[1].Get()) == 1)
+		if (_engine.ReadSysFlag(args[1].GetInt()) == 1)
 		{
 			_engine.HasPlayMovie = true;
 		}
 		else
 		{
 			_engine.HasPlayMovie = false;
-			_engine.WirtSysFlag(args[1].Get(), 1);
+			_engine.WirtSysFlag(args[1].GetInt(), 1);
 		}
 
-		_engine.PlayMovie(args[0].Get());
+		_engine.PlayMovie(args[0].GetString());
 		return false;
 	}
 	public bool Wait(List<Wa2Var> args)
 	{
-		_engine.WaitTimer.Start(args[0].Get() * _engine.FrameTime);
+		_engine.WaitTimer.Start(args[0].GetFloat() * _engine.FrameTime);
 		return false;
 
 	}
@@ -872,14 +874,14 @@ public class Wa2Func
 	public bool WaitTimer(List<Wa2Var> args)
 	{
 
-		// _engine.EndTime = _engine.StartTime + (int)args[0].Get();
+		// _engine.EndTime = _engine.StartTime + (int)args[0].GetInt();
 		// if (_engine.Skipping && _engine.SkipMode)
 		// {
 		// 	_engine.StartTime = _engine.EndTime;
 		// }
-		if (Time.GetTicksMsec() < (ulong)(_engine.StartTime + args[0].Get()))
+		if (Time.GetTicksMsec() < (ulong)(_engine.StartTime + args[0].GetInt()))
 		{
-			_engine.WaitTimer.Start((_engine.StartTime + args[0].Get() - (int)Time.GetTicksMsec()) * 0.001f, Wa2WaitTimer.WaitType.WAIT_TIMER, (int)args[0].Get());
+			_engine.WaitTimer.Start((_engine.StartTime + args[0].GetInt() - (int)Time.GetTicksMsec()) * 0.001f, Wa2WaitTimer.WaitType.WAIT_TIMER, (int)args[0].GetInt());
 		}
 		args.Clear();
 		return false;
@@ -891,12 +893,12 @@ public class Wa2Func
 	}
 	public bool GetGameFlag(List<Wa2Var> args)
 	{
-		_engine.Script.PushInt(5, 3, _engine.ReadSysFlag(args[0].Get()));
+		_engine.Script.PushInt(5, 3, _engine.ReadSysFlag(args[0].GetInt()));
 		return true;
 	}
 	public bool SetGameFlag(List<Wa2Var> args)
 	{
-		_engine.WirtSysFlag(args[0].Get(), args[1].Get());
+		_engine.WirtSysFlag(args[0].GetInt(), args[1].GetInt());
 		return true;
 	}
 	public bool LogOut(List<Wa2Var> args)
@@ -905,7 +907,7 @@ public class Wa2Func
 	}
 	public bool V_Flag(List<Wa2Var> args)
 	{
-		_engine.SetCgFlag(args[0].Get() * 10 + args[1].Get(), (byte)args[2].Get());
+		_engine.SetCgFlag(args[0].GetInt() * 10 + args[1].GetInt(), (byte)args[2].GetInt());
 		return true;
 	}
 	public bool H_Flag(List<Wa2Var> args)
@@ -915,10 +917,10 @@ public class Wa2Func
 	}
 	public bool Calender(List<Wa2Var> args)
 	{
-		int year = args[0].Get();
-		int month = args[1].Get();
-		int day = args[2].Get();
-		int dayOfWeek = args[3].Get();
+		int year = args[0].GetInt();
+		int month = args[1].GetInt();
+		int day = args[2].GetInt();
+		int dayOfWeek = args[3].GetInt();
 		if (month == 1 || month == 2)
 		{
 			year -= 1;
@@ -928,9 +930,9 @@ public class Wa2Func
 		{
 			dayOfWeek = (int)(day + year + (int)((ulong)(1374389535L * year) >> 32 >> 7) + (13 * month + 8) / 5 + (int)((ulong)(1374389535L * year) >> 32 >> 31) - year / 100 + year / 4) % 7;
 		}
-		_engine.Calender.Year = args[0].Get();
-		_engine.Calender.Month = args[1].Get();
-		_engine.Calender.Day = args[2].Get();
+		_engine.Calender.Year = args[0].GetInt();
+		_engine.Calender.Month = args[1].GetInt();
+		_engine.Calender.Day = args[2].GetInt();
 		_engine.Calender.DayOfWeek = dayOfWeek;
 		// if (_engine.Calender.Year == 2013 && _engine.Calender.Month == 2 && _engine.Calender.Day == 29)
 		// {
@@ -938,7 +940,7 @@ public class Wa2Func
 		// }
 		// else
 		// {
-		// 	_engine.Calender.DayOfWeek = (int)new DateTime(args[0].Get(), args[1].Get(), args[2].Get()).DayOfWeek;
+		// 	_engine.Calender.DayOfWeek = (int)new DateTime(args[0].GetInt(), args[1].GetInt(), args[2].GetInt()).DayOfWeek;
 		// }
 		_engine.UiMgr.OpenUICalender();
 		// uint hour=args[3];
@@ -971,10 +973,10 @@ public class Wa2Func
 		//disable
 		_engine.SelectItems.Add(new SelectItem
 		{
-			Text = args[0].Get(),
-			V1 = args[1].Get(),
-			V2 = args[2].Get(),
-			V3 = args[3].Get(),
+				Text = args[0].GetString(),
+			V1 = args[1].GetInt(),
+			V2 = args[2].GetInt(),
+			V3 = args[3].GetInt(),
 		});
 		return true;
 	}
@@ -990,10 +992,10 @@ public class Wa2Func
 	}
 	public bool S(List<Wa2Var> args)
 	{
-		_engine.AnimatorMgr.AddBgMoveAnimation(_engine.BgTexture, args[2].Get() * _engine.FrameTime, args[0].Get(), args[1].Get());
+		_engine.AnimatorMgr.AddBgMoveAnimation(_engine.BgTexture, args[2].GetFloat() * _engine.FrameTime, args[0].GetFloat(), args[1].GetFloat());
 		// Wa2ImageAnimator animator = new(_engine.BgTexture);
 		// animator.Wait = false;
-		// animator.InitMove(args[2].Get() * _engine.FrameTime, args[0].Get(), args[1].Get());
+		// animator.InitMove(args[2].GetInt() * _engine.FrameTime, args[0].GetInt(), args[1].GetInt());
 		return true;
 	}
 	public bool Z(List<Wa2Var> args6)
@@ -1041,12 +1043,12 @@ public class Wa2Func
 	}
 	public bool NovelMode(List<Wa2Var> args)
 	{
-		_engine.AdvMain.SetNovelMode(args[0].Get() != 0);
+		_engine.AdvMain.SetNovelMode(args[0].GetInt() != 0);
 		return false;
 	}
 	public bool EroMode(List<Wa2Var> args)
 	{
-		_engine.EroMode = args[0].Get() == 1;
+		_engine.EroMode = args[0].GetInt() == 1;
 		return true;
 	}
 	public bool GetReplayMode(List<Wa2Var> args)
@@ -1058,7 +1060,7 @@ public class Wa2Func
 	{
 		if (args[0].CmdType == CmdType.STR_VAR)
 		{
-			_engine.AdvMain.NameLabel.Text = args[0].Get();
+			_engine.AdvMain.NameLabel.Text = args[0].GetString();
 		}
 		else
 		{
@@ -1074,15 +1076,15 @@ public class Wa2Func
 	}
 	public bool B2(List<Wa2Var> args)
 	{
-		int id = args[2].Get() + 10 * args[1].Get();
-		_engine.RenderImage(id, args[0].Get(), false, 0, args[3].Get(), args[4].Get(), args[5].Get(), args[6].Get(), args[7].Get(), args[8].Get());
+		int id = args[2].GetInt() + 10 * args[1].GetInt();
+		_engine.RenderImage(id, args[0].GetInt(), false, 0, args[3].GetInt(), args[4].GetInt(), args[5].GetInt(), args[6].GetInt(), args[7].GetFloat(), args[8].GetFloat());
 		return false;
 		// _engine.AnimatorMgr.FinishAll(true);
 		// Texture2D NextTexture;
 		// Texture2D CeacheTexture = ImageTexture.CreateFromImage(_engine.Viewport.GetTexture().GetImage()); ;
-		// if (args[1].Get() >= 0)
+		// if (args[1].GetInt() >= 0)
 		// {
-		// 	_engine.BgInfo.Path = string.Format("B{0:D4}{1:D1}{2:D1}.tga", args[1].Get(), args[2].Get(), _engine.TimeMode);
+		// 	_engine.BgInfo.Path = string.Format("B{0:D4}{1:D1}{2:D1}.tga", args[1].GetInt(), args[2].GetInt(), _engine.TimeMode);
 		// 	NextTexture = Wa2Resource.GetTgaImage(_engine.BgInfo.Path);
 		// }
 		// else
@@ -1098,8 +1100,8 @@ public class Wa2Func
 		// // Wa2ImageAnimator animator2 = new(_engine.MaskTexture);
 		// _engine.MaskTexture.SetCurOffset(Vector2.Zero);
 		// _engine.MaskTexture.SetCurScale(Vector2.One);
-		// _engine.BgInfo.Offset = new Vector2(args[5].Get() - args[4].Get(), args[6].Get());
-		// _engine.BgInfo.Scale = new Vector2(args[7].Get(), args[8].Get());
+		// _engine.BgInfo.Offset = new Vector2(args[5].GetInt() - args[4].GetInt(), args[6].GetInt());
+		// _engine.BgInfo.Scale = new Vector2(args[7].GetInt(), args[8].GetInt());
 		// _engine.MaskTexture.SetNextOffset(_engine.BgInfo.Offset);
 		// _engine.MaskTexture.SetNextScale(_engine.BgInfo.Scale);
 
@@ -1109,32 +1111,32 @@ public class Wa2Func
 		// _engine.BgTexture.SetCurTexture(NextTexture);
 		// // animator1.InitFade(_engine.BgInfo.Frame * _engine.FrameTime);
 		// // animator2.InitHide(_engine.BgInfo.Frame * _engine.FrameTime);
-		// _engine.AnimatorMgr.AddMaskFeadAnimation(_engine.MaskTexture, args[3].Get() * _engine.FrameTime, true);
-		// _engine.ClearChar(args[3].Get() * _engine.FrameTime);
+		// _engine.AnimatorMgr.AddMaskFeadAnimation(_engine.MaskTexture, args[3].GetInt() * _engine.FrameTime, true);
+		// _engine.ClearChar(args[3].GetInt() * _engine.FrameTime);
 		// return false;
 	}
 	public bool BC2(List<Wa2Var> args)
 	{
-		int id = args[2].Get() + 10 * args[1].Get();
-		_engine.RenderImage(id, args[0].Get(), true, 0, args[3].Get(), args[4].Get(), args[5].Get(), args[6].Get(), args[7].Get(), args[8].Get());
+		int id = args[2].GetInt() + 10 * args[1].GetInt();
+		_engine.RenderImage(id, args[0].GetInt(), true, 0, args[3].GetInt(), args[4].GetInt(), args[5].GetInt(), args[6].GetInt(), args[7].GetFloat(), args[8].GetFloat());
 		return false;
 	}
 	public bool V2(List<Wa2Var> args)
 	{
 		// Texture2D NextTexture;
 
-		// if (args[1].Get() >= 0)
+		// if (args[1].GetInt() >= 0)
 		// {
-		// 	_engine.BgInfo.Path = string.Format("v{0:D5}{1:D1}.tga", args[1].Get(), args[2].Get());
-		// 	_engine.SetCgFlag(args[1].Get() * 10 + args[2].Get(), 1);
+		// 	_engine.BgInfo.Path = string.Format("v{0:D5}{1:D1}.tga", args[1].GetInt(), args[2].GetInt());
+		// 	_engine.SetCgFlag(args[1].GetInt() * 10 + args[2].GetInt(), 1);
 		// 	NextTexture = Wa2Resource.GetTgaImage(_engine.BgInfo.Path);
 		// }
 		// else
 		// {
 		// 	NextTexture = ImageTexture.CreateFromImage(_engine.Viewport.GetTexture().GetImage());
 		// }
-		// _engine.BgInfo.Offset = new Vector2(args[5].Get() - args[4].Get(), args[6].Get());
-		// _engine.BgInfo.Scale = new Vector2(args[7].Get(), args[8].Get());
+		// _engine.BgInfo.Offset = new Vector2(args[5].GetInt() - args[4].GetInt(), args[6].GetInt());
+		// _engine.BgInfo.Scale = new Vector2(args[7].GetInt(), args[8].GetInt());
 		// _engine.MaskTexture.SetNextOffset(_engine.BgInfo.Offset);
 		// _engine.MaskTexture.SetNextScale(_engine.BgInfo.Scale);
 		// _engine.BgTexture.SetCurOffset(_engine.BgInfo.Offset);
@@ -1142,12 +1144,12 @@ public class Wa2Func
 		// _engine.MaskTexture.SetCurTexture(ImageTexture.CreateFromImage(_engine.Viewport.GetTexture().GetImage()));
 		// _engine.MaskTexture.SetNextTexture(NextTexture);
 		// _engine.MaskTexture.SetMaskTexture(null);
-		// _engine.AnimatorMgr.AddMaskFeadAnimation(_engine.MaskTexture, args[3].Get() * _engine.FrameTime);
-		// _engine.ClearChar(args[3].Get() * _engine.FrameTime);
+		// _engine.AnimatorMgr.AddMaskFeadAnimation(_engine.MaskTexture, args[3].GetInt() * _engine.FrameTime);
+		// _engine.ClearChar(args[3].GetInt() * _engine.FrameTime);
 		// _engine.BgTexture.SetCurTexture(NextTexture);
 		// return false;
-		int id = args[2].Get() + 10 * args[1].Get();
-		_engine.RenderImage(id, args[0].Get(), false, 1, args[3].Get(), args[4].Get(), args[5].Get(), args[6].Get(), args[7].Get(), args[8].Get());
+		int id = args[2].GetInt() + 10 * args[1].GetInt();
+		_engine.RenderImage(id, args[0].GetInt(), false, 1, args[3].GetInt(), args[4].GetInt(), args[5].GetInt(), args[6].GetInt(), args[7].GetFloat(), args[8].GetFloat());
 		return false;
 	}
 	public bool H2(List<Wa2Var> args)
@@ -1156,7 +1158,7 @@ public class Wa2Func
 	}
 	public bool SetWeather2(List<Wa2Var> args)
 	{
-		_engine.SetWeather(args[0].Get(), args[1].Get(), args[2].Get(),  args[6].Get(), args[3].Get(), args[4].Get(), args[5].Get());
+		_engine.SetWeather(args[0].GetInt(), args[1].GetInt(), args[2].GetInt(),  args[6].GetInt(), args[3].GetInt(), args[4].GetInt(), args[5].GetInt());
 		return true;
 	}
 	public bool ChangeWeather2(List<Wa2Var> args)
@@ -1165,25 +1167,25 @@ public class Wa2Func
 		{
 			return true;
 		}
-		if (args[0].Get() != -1000)
+		if (args[0].GetInt() != -1000)
 		{
-			_engine.SetWeatherSpeedX(args[0].Get());
+			_engine.SetWeatherSpeedX(args[0].GetInt());
 		}
-		if (args[1].Get() != -1000)
+		if (args[1].GetInt() != -1000)
 		{
-			_engine.SetWeatherSpeedY(args[1].Get());
+			_engine.SetWeatherSpeedY(args[1].GetInt());
 		}
-		if (args[2].Get() != -1000)
+		if (args[2].GetInt() != -1000)
 		{
-			_engine.SetWeatherCount(args[2].Get());
+			_engine.SetWeatherCount(args[2].GetInt());
 		}
-		if (args[3].Get() != -1000)
+		if (args[3].GetInt() != -1000)
 		{
 
 		}
-		if (args[4].Get() != -1000)
+		if (args[4].GetInt() != -1000)
 		{
-			_engine.SetWeatherIndex(args[4].Get());
+			_engine.SetWeatherIndex(args[4].GetInt());
 		}
 		return true;
 	}
@@ -1191,9 +1193,9 @@ public class Wa2Func
 	{
 		if (!_engine.CanSkip())
 		{
-			_engine.AnimatorMgr.AddShakeAnimation(args[0].Get(), args[1].Get(), args[2].Get());
+			_engine.AnimatorMgr.AddShakeAnimation(args[0].GetInt(), args[1].GetInt(), args[2].GetInt());
 		}
-		GD.Print("shake类型:", args[0].Get());
+		GD.Print("shake类型:", args[0].GetInt());
 		return false;
 	}
 	public bool M2(List<Wa2Var> args)
@@ -1202,22 +1204,22 @@ public class Wa2Func
 	}
 	public bool NB(List<Wa2Var> args)
 	{
-		_engine.AdvMain.NovelHide(args[0].Get() * _engine.FrameTime);
+		_engine.AdvMain.NovelHide(args[0].GetFloat() * _engine.FrameTime);
 		return false;
 	}
 	public bool NBR(List<Wa2Var> args)
 	{
-		_engine.AdvMain.NovelShow(args[0].Get() * _engine.FrameTime);
+		_engine.AdvMain.NovelShow(args[0].GetFloat() * _engine.FrameTime);
 		return false;
 	}
 	public bool VXV(List<Wa2Var> args)
 	{
-		_engine.SoundMgr.SetVoiceVolume(args[2].Get(), args[0].Get(), args[1].Get());
+		_engine.SoundMgr.SetVoiceVolume(args[2].GetInt(), args[0].GetInt(), args[1].GetInt());
 		return true;
 	}
 	public bool Wait2(List<Wa2Var> args)
 	{
-		_engine.WaitTimer.Start(args[0].Get() * _engine.FrameTime);
+		_engine.WaitTimer.Start(args[0].GetFloat() * _engine.FrameTime);
 		return false;
 		// GD.Print("暂停游戏" + args[0] + "帧");
 	}
@@ -1235,7 +1237,7 @@ public class Wa2Func
 	{
 		_engine.Reset(false);
 		_engine.ScriptStack.Clear();
-		_engine.Script = new(args[0].Get(), args[1].Get());
+		_engine.Script = new(args[0].GetString(), args[1].GetInt());
 		_engine.ScriptStack.Push(_engine.Script);
 		_engine.SetScriptIdx(_engine.Script.ScriptName);
 
@@ -1245,17 +1247,17 @@ public class Wa2Func
 	public bool SCall(List<Wa2Var> args)
 	{
 		_engine.Reset(false);
-		GD.Print("调用脚本", args[0].Get());
-		_engine.ScriptStack.Push(new(args[0].Get(), args[1].Get()));
+		GD.Print("调用脚本", args[0].GetString());
+		_engine.ScriptStack.Push(new(args[0].GetString(), args[1].GetInt()));
 		_engine.Script = _engine.ScriptStack.Peek();
 		_engine.SetScriptIdx(_engine.Script.ScriptName);
-		// GD.Print("scall:", args[0].Get());
+		// GD.Print("scall:", args[0].GetInt());
 		return false;
 		// GD.Print("无用函数");
 	}
 	public bool call(List<Wa2Var> args)
 	{
-		_engine.ScriptStack.Push(new(_engine.Script.ScriptName, args[0].Get()));
+		_engine.ScriptStack.Push(new(_engine.Script.ScriptName, args[0].GetInt()));
 		_engine.Script = _engine.ScriptStack.Peek();
 		return false;
 	}
@@ -1277,7 +1279,7 @@ public class Wa2Func
 	}
 	public bool _int(List<Wa2Var> args)
 	{
-		var v = args[^1].Get();
+		var v = args[^1].GetInt();
 		args.RemoveAt(args.Count - 1);
 		_engine.Script.PushInt(5, 3, (int)v);
 		return true;
@@ -1285,7 +1287,7 @@ public class Wa2Func
 	}
 	public bool _float(List<Wa2Var> args)
 	{
-		var v = args[^1].Get();
+		float v = args[^1].GetFloat();
 		args.RemoveAt(args.Count - 1);
 		_engine.Script.PushFloat(5, 4, (float)v);
 
@@ -1297,42 +1299,42 @@ public class Wa2Func
 	}
 	public bool Sin(List<Wa2Var> args)
 	{
-		var v = args[^1].Get() * (3.1415926f / 180.0f);
+		float v = args[^1].GetFloat() * (3.1415926f / 180.0f);
 		args.RemoveAt(args.Count - 1);
 		_engine.Script.PushFloat(5, 4, MathF.Sin(v));
 		return true;
 	}
 	public bool Cos(List<Wa2Var> args)
 	{
-		var v = args[^1].Get();
+		float v = args[^1].GetFloat();
 		args.RemoveAt(args.Count - 1);
 		_engine.Script.PushFloat(5, 4, MathF.Cos(v));
 		return true;
 	}
 	public bool Tan(List<Wa2Var> args)
 	{
-		var v = args[^1].Get();
+		float v = args[^1].GetFloat();
 		args.RemoveAt(args.Count - 1);
 		_engine.Script.PushFloat(5, 4, MathF.Tan(v));
 		return true;
 	}
 	public bool Asin(List<Wa2Var> args)
 	{
-		var v = args[^1].Get();
+		float v = args[^1].GetFloat();
 		args.RemoveAt(args.Count - 1);
 		_engine.Script.PushFloat(5, 4, MathF.Asin(v));
 		return true;
 	}
 	public bool Acos(List<Wa2Var> args)
 	{
-		var v = args[^1].Get();
+		float v = args[^1].GetFloat();
 		args.RemoveAt(args.Count - 1);
 		_engine.Script.PushFloat(5, 4, MathF.Acos(v));
 		return true;
 	}
 	public bool Atan(List<Wa2Var> args)
 	{
-		var v = args[^1].Get();
+		float v = args[^1].GetFloat();
 		args.RemoveAt(args.Count - 1);
 		_engine.Script.PushFloat(5, 4, MathF.Atan(v));
 		return true;
@@ -1343,14 +1345,14 @@ public class Wa2Func
 	}
 	public bool Pow(List<Wa2Var> args)
 	{
-		// var v=args[^1].Get();
+		// var v=args[^1].GetInt();
 		// args.RemoveAt(args.Count-1);
 		// _engine.Script.PushFloat(5, 4,MathF.Pow(v));
 		return true;
 	}
 	public bool Sqrt(List<Wa2Var> args)
 	{
-		var v = args[^1].Get();
+		float v = args[^1].GetFloat();
 		args.RemoveAt(args.Count - 1);
 		_engine.Script.PushFloat(5, 4, MathF.Sqrt(v));
 		return true;

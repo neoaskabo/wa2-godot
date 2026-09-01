@@ -240,6 +240,26 @@ public class Wa2Resource
 			}
 		}
 	}
+	private static uint ReadUInt32LE(FileAccess fa)
+	{
+		byte[] bytes = fa.GetBuffer(4);
+		if (!BitConverter.IsLittleEndian)
+		{
+			Array.Reverse(bytes);
+		}
+		return BitConverter.ToUInt32(bytes, 0);
+	}
+
+	private static ulong ReadUInt64LE(FileAccess fa)
+	{
+		byte[] bytes = fa.GetBuffer(8);
+		if (!BitConverter.IsLittleEndian)
+		{
+			Array.Reverse(bytes);
+		}
+		return BitConverter.ToUInt64(bytes, 0);
+	}
+
 	public static byte[] LoadFileBuffer(string path)
 	{
 		path = path.ToLower();
@@ -249,16 +269,20 @@ public class Wa2Resource
 			return null;
 		}
 
-		string fullPath = System.IO.Path.Combine(ProjectSettings.GlobalizePath(ResPath), entry.PkgPath);
+		string fullPath = ResPath + entry.PkgPath;
 
-		using (System.IO.FileStream fs = new System.IO.FileStream(fullPath, System.IO.FileMode.Open, System.IO.FileAccess.Read))
-		using (System.IO.BinaryReader reader = new System.IO.BinaryReader(fs))
+		using (FileAccess fa = FileAccess.Open(fullPath, FileAccess.ModeFlags.Read))
 		{
-			fs.Seek(entry.Offset, System.IO.SeekOrigin.Begin);
+			if (fa == null)
+			{
+				return null;
+			}
+			fa.Seek(entry.Offset);
 
 			if (entry.Crypted == 0)
 			{
-				return reader.ReadBytes((int)entry.Size);
+				byte[] rawBuffer = fa.GetBuffer(entry.Size);
+				return rawBuffer;
 			}
 			else
 			{
@@ -272,10 +296,10 @@ public class Wa2Resource
 				uint arr_w = 0xFEE;
 				uint insize = 0, outsize = 0;
 
-				uint inlim = reader.ReadUInt32();
-				uint outlim = reader.ReadUInt32();
+				uint inlim = ReadUInt32LE(fa);
+				uint outlim = ReadUInt32LE(fa);
 
-				byte[] readBuffer = reader.ReadBytes((int)inlim);
+				byte[] readBuffer = fa.GetBuffer(inlim);
 				byte[] buffer = new byte[outlim];
 
 				while (true)
@@ -302,7 +326,7 @@ public class Wa2Resource
 							uint arr_r = (uint)(byte1 | (byte2 & 0xF0) << 4);
 							uint counter = (uint)(byte2 & 0xF) + 3;
 
-							while (counter-- > 0)
+							while (counter-- > 0 && outsize < outlim)
 							{
 								byte b = arr[arr_r++ & 0xFFF];
 								arr[arr_w++ & 0xFFF] = b;
@@ -323,35 +347,43 @@ public class Wa2Resource
 	}
 	public static void LoadPak(string path)
 	{
-		string fullPath = System.IO.Path.Combine(ProjectSettings.GlobalizePath(ResPath), path);
-		// GD.Print(ProjectSettings.GlobalizePath(ResPath));
-		// GD.Print(path);
+		string fullPath = ResPath + path;
 		try
 		{
-			using (System.IO.FileStream fs = new System.IO.FileStream(fullPath, System.IO.FileMode.Open, System.IO.FileAccess.Read))
-			using (System.IO.BinaryReader reader = new System.IO.BinaryReader(fs))
+			using (FileAccess fa = FileAccess.Open(fullPath, FileAccess.ModeFlags.Read))
 			{
-				uint magic = reader.ReadUInt32();
+				if (fa == null)
+				{
+					Error err = FileAccess.GetOpenError();
+					if (err == Error.FileNotFound)
+						throw new System.IO.FileNotFoundException("File not found: " + fullPath);
+					else if (err == Error.Unauthorized)
+						throw new System.UnauthorizedAccessException("Access denied: " + fullPath);
+					else
+						throw new System.IO.IOException("Failed to open file: " + fullPath + " Error: " + err);
+				}
+
+				uint magic = ReadUInt32LE(fa);
 
 				if (magic == 0x5041434B) // 'PACK'
 				{
-					reader.ReadUInt64(); // skip 8 bytes
-					uint nentry = reader.ReadUInt32();
+					ReadUInt64LE(fa); // skip 8 bytes
+					uint nentry = ReadUInt32LE(fa);
 
 					for (int i = 0; i < nentry; i++)
 					{
-						fs.Seek(16 + i * 44, System.IO.SeekOrigin.Begin);
+						fa.Seek(16 + (ulong)i * 44);
 
-						uint crypted = reader.ReadUInt32();
+						uint crypted = ReadUInt32LE(fa);
 
-						byte[] nameBuffer = reader.ReadBytes(24);
+						byte[] nameBuffer = fa.GetBuffer(24);
 						string fileName = Encoding.GetEncoding("shift_jis")
 								.GetString(nameBuffer).ToLower().Replace("\0", "");
 
-						reader.ReadUInt64(); // skip 8 bytes
+						ReadUInt64LE(fa); // skip 8 bytes
 
-						uint offset = reader.ReadUInt32();
-						uint size = reader.ReadUInt32();
+						uint offset = ReadUInt32LE(fa);
+						uint size = ReadUInt32LE(fa);
 
 						FileEntry entry = new()
 						{
@@ -367,13 +399,13 @@ public class Wa2Resource
 				}
 				else if (magic == 0x0043414C) // 'LAC\x00'
 				{
-					uint nentry = reader.ReadUInt32();
+					uint nentry = ReadUInt32LE(fa);
 
 					for (int i = 0; i < nentry; i++)
 					{
-						fs.Seek(8 + i * 40, System.IO.SeekOrigin.Begin);
+						fa.Seek(8 + (ulong)i * 40);
 
-						byte[] nameBuffer = reader.ReadBytes(32);
+						byte[] nameBuffer = fa.GetBuffer(32);
 						for (int j = 0; j < nameBuffer.Length; j++)
 						{
 							if (nameBuffer[j] != 0)
@@ -385,8 +417,8 @@ public class Wa2Resource
 						string fileName = Encoding.GetEncoding("shift_jis")
 								.GetString(nameBuffer).ToLower().Replace("\0", "");
 
-						uint size = reader.ReadUInt32();
-						uint offset = reader.ReadUInt32();
+						uint size = ReadUInt32LE(fa);
+						uint offset = ReadUInt32LE(fa);
 
 						FileEntry entry = new()
 						{

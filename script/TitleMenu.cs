@@ -56,6 +56,11 @@ public partial class TitleMenu : Control
 	public override void _Ready()
 	{
 		_engine = Wa2EngineMain.Engine;
+		if (OS.GetName() == "iOS")
+		{
+			QuitButton.Disabled = true;
+			QuitButton.Hide();
+		}
 		StartButton.ButtonDown += OnStartButtonDown;
 		StartBackButton.ButtonDown += OnStartBackButtonDown;
 		QuitButton.ButtonDown += OnQuitButtonDown;
@@ -77,16 +82,32 @@ public partial class TitleMenu : Control
 		SceneReplayButton.ButtonDown += OnSceneReplayButtonDown;
 		VoiceMessageButton.ButtonDown+=OnVoiceMessageButtonDown;
 	}
+	public void SetResourcesReady(bool ready)
+	{
+		StartButton.Disabled = !ready;
+		LoadtButton.Disabled = !ready;
+		SpecialButton.Disabled = !ready;
+	}
+	private bool CanOpenContent()
+	{
+		return _engine != null && _engine.ResourcesReady;
+	}
 	public void OnSceneReplayButtonDown()
 	{
+		if (!CanOpenContent())
+			return;
 		_engine.UiMgr.OpenSceneReplayMenu();
 	}
 	public void OnVoiceMessageButtonDown()
 	{
+		if (!CanOpenContent())
+			return;
 		_engine.UiMgr.OpenVoiceMessageMenu();
 	}
 	public void OnDigitalNovelButtonDown()
 	{
+		if (!CanOpenContent())
+			return;
 		Special.Hide();
 		DigitalNovel.Show();
 	}
@@ -102,23 +123,33 @@ public partial class TitleMenu : Control
 	}
 	public void OnCgModeButtonDown()
 	{
+		if (!CanOpenContent())
+			return;
 		_engine.UiMgr.OpenCGModeMenu();
 	}
 	public void OnBgmModeButtonDown()
 	{
+		if (!CanOpenContent())
+			return;
 		_engine.UiMgr.OpenBgmModeMenu();
 	}
 	public void OnLoadButtonDown()
 	{
+		if (!CanOpenContent())
+			return;
 		_engine.UiMgr.OpenLoadMenu();
 	}
 	public void OnSpecialButtonDown()
 	{
+		if (!CanOpenContent())
+			return;
 		MenuBttons.Hide();
 		Special.Show();
 	}
 	public async void OnCodeaButtonDown()
 	{
+		if (!CanOpenContent())
+			return;
 		_engine.SoundMgr.StopBgm();
 		AnimationPlayer.Play("close");
 		await ToSignal(AnimationPlayer, AnimationPlayer.SignalName.AnimationFinished);
@@ -127,6 +158,8 @@ public partial class TitleMenu : Control
 	}
 	public async void OnCCButtonDown()
 	{
+		if (!CanOpenContent())
+			return;
 		_engine.SoundMgr.StopBgm();
 		AnimationPlayer.Play("close");
 		await ToSignal(AnimationPlayer, AnimationPlayer.SignalName.AnimationFinished);
@@ -135,6 +168,8 @@ public partial class TitleMenu : Control
 	}
 	public async void OnDigitalNovel1ButtonDown()
 	{
+		if (!CanOpenContent())
+			return;
 		_engine.SoundMgr.StopBgm();
 		AnimationPlayer.Play("close");
 		await ToSignal(AnimationPlayer, AnimationPlayer.SignalName.AnimationFinished);
@@ -144,6 +179,8 @@ public partial class TitleMenu : Control
 	}
 	public async void OnDigitalNovel2ButtonDown()
 	{
+		if (!CanOpenContent())
+			return;
 		_engine.SoundMgr.StopBgm();
 		AnimationPlayer.Play("close");
 		await ToSignal(AnimationPlayer, AnimationPlayer.SignalName.AnimationFinished);
@@ -153,6 +190,8 @@ public partial class TitleMenu : Control
 	}
 	public async void OnIcButtonDown()
 	{
+		if (!CanOpenContent())
+			return;
 		_engine.SoundMgr.StopBgm();
 		AnimationPlayer.Play("close");
 		await ToSignal(AnimationPlayer, AnimationPlayer.SignalName.AnimationFinished);
@@ -193,16 +232,19 @@ public partial class TitleMenu : Control
 	}
 	public void OnStartButtonDown()
 	{
+		if (!CanOpenContent())
+			return;
 		MenuBttons.Hide();
 		InitalStart.Show();
 	}
 	public async void Open()
 	{
+		SetResourcesReady(_engine.ResourcesReady);
 		Show();
 		AnimationPlayer.Play("RESET");
 		await ToSignal(AnimationPlayer, AnimationPlayer.SignalName.AnimationFinished);
 		_engine.SoundMgr.StopBgm();
-		if (_engine.ReplayMode > 0)
+		if (_engine.ReplayMode > 0 && _engine.ResourcesReady)
 		{
 			AnimationPlayer.Play("open");
 			AnimationPlayer.Advance(AnimationPlayer.CurrentAnimation.Length);
@@ -214,7 +256,10 @@ public partial class TitleMenu : Control
 			// await ToSignal(AnimationPlayer, AnimationPlayer.SignalName.AnimationFinished);
 			AnimationPlayer.Play("open");
 			await ToSignal(AnimationPlayer, AnimationPlayer.SignalName.AnimationFinished);
-			_engine.SoundMgr.PlayBgm(31);
+			if (_engine.ResourcesReady)
+			{
+				_engine.SoundMgr.PlayBgm(31);
+			}
 		}
 		
 		_engine.ReplayMode = 0;

@@ -166,7 +166,7 @@ public partial class Wa2AdvMain : Control
 		{
 			SelectMessageContainer.GetChild<SelectMessage>(i).Hide();
 		}
-		_engine.Script.Args[^1].Set(idx);
+		_engine.Script.Args[^1].SetInt(idx);
 		_engine.WirtSysFlag(_engine.SelectIdx, (1 << idx) | _engine.ReadSysFlag(_engine.SelectIdx));
 		_engine.SelectItems.Clear();
 		SelectMessageContainer.Hide();

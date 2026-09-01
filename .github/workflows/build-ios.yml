@@ -1,0 +1,411 @@
+# ---------------------------------------------------------------------------
+# Build an UNSIGNED iOS IPA for wa2-godot using GitHub's macOS runner.
+#
+# Why unsigned: a free Apple ID cannot be used for automated signing in CI
+# (Apple requires interactive 2FA and the session expires constantly).
+# So we build an unsigned .app, wrap it as an .ipa, and you sign it on
+# install with Sideloadly / AltStore / SideStore using your free Apple ID.
+#
+# Result: an artifact named wa2-ios-unsigned.ipa (iPhone + iPad universal).
+# ---------------------------------------------------------------------------
+name: Build iOS IPA (unsigned)
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish the IPA to GitHub Packages and Releases'
+        type: boolean
+        default: true
+  push:
+    branches: [main, master]
+    tags: ['v*']
+
+concurrency:
+  group: build-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.5.1"
+  GODOT_RELEASE: "stable"
+  PRESET_NAME: "iOS"
+  XCODE_PROJECT: "build/wa2.xcodeproj"
+  IPA_NAME: "wa2-ios-unsigned.ipa"
+  APP_VERSION: "0.3.0"
+  RELEASE_TAG: "v0.3.0-ios"
+  PKG_GROUP: "io.github.neoaskabo"
+  PKG_ARTIFACT: "wa2-ios"
+  # Upstream release tag the game assets are recovered from. Must match the
+  # Godot project version, otherwise the extracted art can be out of sync.
+  UPSTREAM_TAG: "v0.3b"
+  # Upstream names the APK after the project version, which can differ from the
+  # release tag: tag "v0.3b" ships "wa2_0.3cn.apk".
+  UPSTREAM_APK_NAME: "0.3"
+
+jobs:
+  build:
+    name: Export Godot project and build unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          sw_vers
+
+      - name: Restore game assets (not tracked in git)
+        run: |
+          set -euo pipefail
+          # assets/grp, assets/se, assets/fonts/cn and assets/fonts/jp are all
+          # excluded by the upstream .gitignore, so a fresh clone has none of
+          # them. Without assets/grp the exported PCK has no weather.png (snow
+          # renders as white squares) and no title/menu graphics (black screen).
+          #
+          # They are recovered losslessly from upstream's official Android APK,
+          # which ships them in Godot's imported form. This keeps game assets
+          # out of git history while still producing a complete build.
+          # No pip: the runner's Python is marked externally managed (PEP 668),
+          # so `pip install Pillow` is unreliable. The script decodes the WebP
+          # textures with the macOS `sips` CLI instead and only falls back to
+          # Pillow on other platforms.
+          python3 tools/extract_assets.py --tag "${UPSTREAM_TAG}" --apk-name "${UPSTREAM_APK_NAME}" --out .
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Install .NET iOS workload
+        run: |
+          dotnet workload install ios --skip-sign-check
+          dotnet workload list
+
+      - name: "Preflight - compile C# sources"
+        run: |
+          set -euo pipefail
+          # Godot runs `dotnet publish` internally and swallows the MSBuild
+          # output, so a broken build just prints "Failed to build project".
+          # Compile here first (host architecture is fine) to surface the real
+          # C# errors, e.g. CS0246 for a missing type, in the Actions log.
+          dotnet build wa2.csproj -c Release -v minimal
+
+      - name: Cache Godot editor
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_RELEASE }}-mono-macos-universal
+
+      - name: Download Godot editor (.NET / mono)
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p ~/godot
+          cd ~/godot
+          curl -L --fail --retry 3 -o godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-${GODOT_RELEASE}_mono_macos.universal.zip"
+          unzip -q godot.zip
+          rm -f godot.zip
+
+      - name: Resolve Godot binary
+        run: |
+          set -euo pipefail
+          GODOT_BIN="$(find "$HOME/godot" -type f -name 'Godot' -perm +111 | head -n 1)"
+          if [ -z "$GODOT_BIN" ]; then
+            echo "Godot binary not found under ~/godot"; find "$HOME/godot" -maxdepth 3 | head -50; exit 1
+          fi
+          echo "GODOT_BIN=$GODOT_BIN" >> "$GITHUB_ENV"
+          "$GODOT_BIN" --version
+
+      - name: Install Godot export templates
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 -o /tmp/tpz.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-${GODOT_RELEASE}_mono_export_templates.tpz"
+          rm -rf /tmp/tpz && mkdir -p /tmp/tpz
+          unzip -q -o /tmp/tpz.zip -d /tmp/tpz
+          ls /tmp/tpz/templates | head -30
+
+          # Install under both the reported version string and the canonical
+          # mono folder name, so we don't depend on how --version is formatted.
+          for d in "$("$GODOT_BIN" --version)" "${GODOT_VERSION}.${GODOT_RELEASE}.mono"; do
+            TDIR="$HOME/Library/Application Support/Godot/export_templates/$d"
+            mkdir -p "$TDIR"
+            cp -R /tmp/tpz/templates/. "$TDIR/"
+            echo "installed templates -> $TDIR"
+          done
+
+      - name: Import project
+        run: '"$GODOT_BIN" --headless --path . --import'
+
+      - name: Export Xcode project (iOS)
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          # IMPORTANT: Godot exits 0 even when the .NET publish fails, which
+          # silently yields an .app containing no game code. Capture the log and
+          # fail hard on the errors that actually matter.
+          "$GODOT_BIN" --headless --path . --export-release "$PRESET_NAME" "$XCODE_PROJECT" 2>&1 | tee build/export.log
+
+          echo "--- export output ---"
+          find build -maxdepth 2 | head -40
+
+          echo "--- scanning export log for build errors ---"
+          if grep -nE "Failed to build project|error CS[0-9]+|Cannot load C# script file|Unhandled exception" build/export.log; then
+            echo "::error::Godot export reported C# build errors; the .app would ship without game code."
+            exit 1
+          fi
+          echo "no C# build errors in export log"
+
+      - name: Resolve Xcode scheme
+        run: |
+          set -euo pipefail
+          SCHEME="$(xcodebuild -project "$XCODE_PROJECT" -list -json \
+            | python3 -c 'import sys,json;print(json.load(sys.stdin)["project"]["schemes"][0])')"
+          echo "SCHEME=$SCHEME" >> "$GITHUB_ENV"
+          echo "using scheme: $SCHEME"
+
+      - name: Build unsigned .app
+        run: |
+          set -euo pipefail
+          mkdir -p build/logs
+          xcodebuild \
+            -project "$XCODE_PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            PROVISIONING_PROFILE="" \
+            ONLY_ACTIVE_ARCH=NO \
+            > build/logs/xcodebuild.log 2>&1 \
+            || { echo "xcodebuild FAILED, last 120 lines:"; tail -n 120 build/logs/xcodebuild.log; exit 1; }
+          tail -n 20 build/logs/xcodebuild.log
+
+      - name: Verify built .app
+        run: |
+          set -euo pipefail
+          APP="$(find build/DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' -type d | head -n 1)"
+          if [ -z "$APP" ]; then
+            echo "No .app produced"; find build/DerivedData -maxdepth 4 -name '*.app' | head; exit 1
+          fi
+          echo "APP=$APP" >> "$GITHUB_ENV"
+          echo "app: $APP"
+          EXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
+          BIN="$APP/$EXE"
+
+          echo "--- architecture ---"
+          lipo -info "$BIN" || true
+          echo "--- file sharing (must be true) ---"
+          /usr/libexec/PlistBuddy -c "Print :UIFileSharingEnabled" "$APP/Info.plist" || true
+
+          echo "--- is the game code actually inside? ---"
+          echo "bundle size: $(du -sh "$APP" | cut -f1)"
+          echo "main binary: $(ls -lh "$BIN" | awk '{print $5}')"
+          echo ".dll files in bundle: $(find "$APP" -name '*.dll' | wc -l | tr -d ' ')"
+
+          # Godot's iOS/.NET export uses NativeAOT: there is no .dll, the
+          # managed code is compiled into a framework next to the executable.
+          # A silent publish failure just leaves that framework out, so check
+          # it explicitly - an app without it runs but shows a blank screen.
+          # Detect by content, not by mode: Godot leaves the dylib at 0644,
+          # and `find -perm +111` is GNU-only anyway (this runner uses BSD find).
+          FW="$(find "$APP/Frameworks" -type f -exec file {} + 2>/dev/null \
+                | grep 'Mach-O' | cut -d: -f1 | head -n 1 || true)"
+          if [ -z "$FW" ]; then
+            echo "::error::No managed framework in the bundle - the .NET publish silently failed."
+            exit 1
+          fi
+          echo "managed framework: $FW ($(ls -lh "$FW" | awk '{print $5}'))"
+
+          # Dump once and grep the file. Piping `strings` into `grep -q` makes
+          # grep exit on the first hit, so strings dies of EPIPE ("failed to
+          # flush output") and, with pipefail set, that non-zero status is
+          # mistaken for "symbol not found".
+          STRINGS_DUMP="$(mktemp)"
+          strings "$FW" > "$STRINGS_DUMP" 2>/dev/null || true
+          echo "strings dumped: $(wc -l < "$STRINGS_DUMP" | tr -d ' ') lines"
+
+          MISSING=""
+          for sym in Wa2EngineMain Wa2AdvMain Wa2Resource SubtitleMgr YamlDotNet; do
+            if grep -q "$sym" "$STRINGS_DUMP"; then
+              echo "  found: $sym"
+            else
+              echo "  MISSING: $sym"
+              MISSING="$MISSING $sym"
+            fi
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::Game code missing from the framework:$MISSING"
+            exit 1
+          fi
+          echo "OK: game code is linked into the bundle"
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          rm -rf Payload && mkdir -p Payload
+          cp -R "$APP" Payload/
+
+          # Godot's export template writes the NativeAOT dylib mode 0644. dyld
+          # needs to mmap the __TEXT segment as PROT_EXEC, so a non-executable
+          # dylib can fail to load at launch. Restore the execute bit here.
+          for f in $(find Payload -path '*/Frameworks/*' -type f); do
+            if file "$f" | grep -q 'Mach-O'; then
+              chmod 755 "$f"
+              echo "chmod 755 -> $f"
+            fi
+          done
+
+          zip -qry "wa2-ios-unsigned.ipa" Payload
+          ls -lh wa2-ios-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wa2-ios-unsigned
+          path: wa2-ios-unsigned.ipa
+          retention-days: 30
+
+      - name: Summary
+        run: |
+          {
+            echo "### wa2 iOS build (unsigned)"
+            echo ""
+            echo "Artifact: \`wa2-ios-unsigned.ipa\` (iPhone + iPad, iOS 14.0+)"
+            echo ""
+            echo "### Next: sign and install with a free Apple ID"
+            echo "1. Download the artifact from this run."
+            echo "2. Open Sideloadly (Windows/macOS) or AltStore."
+            echo "3. Drag the IPA in, sign with your Apple ID, install."
+            echo "4. Re-sign every 7 days (free account limit)."
+            echo ""
+            echo "### Then copy the game data in"
+            echo "Connect the phone, open Finder > Files tab, select the app and"
+            echo "copy your PC \`Wa2Res\` folder into its Documents folder."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # -------------------------------------------------------------------------
+  # Publish. Runs on manual dispatch (publish checkbox) or when a v* tag is
+  # pushed. Uses the built-in GITHUB_TOKEN, which has `packages: write` -
+  # a personal token would need the write:packages scope added by hand.
+  # -------------------------------------------------------------------------
+  publish:
+    name: Publish IPA to Releases and Packages
+    needs: build
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.publish != 'false')
+      || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download IPA artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wa2-ios-unsigned
+          path: dist
+
+      - name: Show what will be published
+        run: |
+          set -euo pipefail
+          ls -lh dist/
+          sha256sum "dist/${IPA_NAME}" | tee dist/sha256.txt
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          {
+            echo "Unsigned iOS build of [wa2-godot](https://github.com/dorakyuraduang/wa2-godot)"
+            echo "(白色相簿2) built by GitHub Actions from \`${{ github.sha }}\`."
+            echo ""
+            echo "## Install"
+            echo ""
+            echo "This IPA is **unsigned** - it will not install as-is. Sign it on"
+            echo "install with a free Apple ID using Sideloadly, AltStore or SideStore,"
+            echo "then re-sign every 7 days."
+            echo ""
+            echo "## Game data"
+            echo ""
+            echo "Copy your PC \`Wa2Res\` folder into the app's Documents folder"
+            echo "(Finder > Files tab, or the Files app). File sharing is enabled."
+            echo ""
+            echo "## Verified in CI"
+            echo ""
+            echo "- arm64, iOS 14.0+, iPhone + iPad"
+            echo "- \`UIFileSharingEnabled = true\`"
+            echo "- Landscape (left + right)"
+            echo "- Game code linked into \`Frameworks/wa2.framework/wa2\` (NativeAOT)"
+            echo ""
+            echo "## Known limitations"
+            echo ""
+            echo "- Godot's C# iOS export is officially experimental"
+            echo "- Chinese text only"
+            echo "- In-game movies are skipped (no FFmpeg backend on iOS)"
+            echo ""
+            echo "---"
+            echo "\`\`\`"
+            cat dist/sha256.txt
+            echo "\`\`\`"
+          } > dist/notes.md
+
+          if gh release view "${RELEASE_TAG}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release ${RELEASE_TAG} exists, replacing the asset"
+            gh release upload "${RELEASE_TAG}" "dist/${IPA_NAME}" \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "${RELEASE_TAG}" "dist/${IPA_NAME}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "WhiteAlbum2 iOS ${APP_VERSION} (unsigned)" \
+              --notes-file dist/notes.md
+          fi
+          echo "release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}"
+
+      - name: Publish to GitHub Packages (Maven registry)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # GitHub Packages has no "generic file" registry, so the Maven
+          # endpoint is used to host the raw .ipa. Coordinates:
+          #   io.github.neoaskabo:wa2-ios:<version>
+          GROUP_PATH="$(echo "${PKG_GROUP}" | tr '.' '/')"
+          FILE="${PKG_ARTIFACT}-${APP_VERSION}.ipa"
+          URL="https://maven.pkg.github.com/${GITHUB_REPOSITORY}/${GROUP_PATH}/${PKG_ARTIFACT}/${APP_VERSION}/${FILE}"
+
+          echo "PUT ${URL}"
+          curl -sS -X PUT \
+            -u "${GITHUB_ACTOR}:${GITHUB_TOKEN}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@dist/${IPA_NAME}" \
+            -w "\nHTTP %{http_code}\n" \
+            "${URL}"
+
+      - name: Verify the package landed
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api "users/${GITHUB_REPOSITORY_OWNER}/packages?package_type=maven" \
+            --jq '.[] | select(.name == "'"${PKG_GROUP}.${PKG_ARTIFACT}"'") | {name, package_type, version_count, url: .html_url}' \
+            || true
+          gh api "users/${GITHUB_REPOSITORY_OWNER}/packages/maven/${PKG_GROUP}.${PKG_ARTIFACT}/versions" \
+            --jq '.[] | {id, name}' || true
